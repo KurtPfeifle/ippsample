@@ -1,0 +1,41 @@
+INCLUDE 00-define-uri-regex.test
+
+
+{
+	SKIP-IF-DEFINED NOPRINT
+	SKIP-IF-NOT-DEFINED OPTIONAL_JPEG
+	SKIP-IF-NOT-DEFINED OPTIONAL_4X6_MEDIA
+	SKIP-IF-NOT-DEFINED OPTIONAL_HIGH_QUALITY
+
+	NAME "Print-Job with JPEG on 4x6, High Quality"
+	OPERATION Print-Job
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR name requesting-user-name $user
+	ATTR name job-name "4x6 Color JPEG; High Quality"
+	ATTR boolean ipp-attribute-fidelity false
+	ATTR name document-name color.jpg
+	ATTR keyword compression none
+	ATTR mimeMediaType document-format image/jpeg
+	GROUP job-attributes-tag
+	ATTR keyword media $OPTIONAL_4X6_MEDIA
+	ATTR enum print-quality 5
+	FILE color.jpg
+
+	STATUS successful-ok
+	STATUS server-error-job-canceled
+	STATUS server-error-busy REPEAT-MATCH REPEAT-LIMIT 30
+
+	EXPECT job-uri OF-TYPE uri COUNT 1 IN-GROUP job-attributes-tag WITH-VALUE "$IPP_URI_SCHEME"
+	EXPECT job-id OF-TYPE integer COUNT 1 IN-GROUP job-attributes-tag
+	       WITH-VALUE >0
+	EXPECT job-state OF-TYPE unknown|enum COUNT 1 IN-GROUP job-attributes-tag
+	       WITH-VALUE 3,4,5,6,7,8,9
+	EXPECT job-state-reasons OF-TYPE keyword IN-GROUP job-attributes-tag
+	EXPECT ?job-state-message OF-TYPE text IN-GROUP job-attributes-tag
+	EXPECT ?number-of-intervening-jobs OF-TYPE integer
+	       IN-GROUP job-attributes-tag WITH-VALUE >-1
+}
+

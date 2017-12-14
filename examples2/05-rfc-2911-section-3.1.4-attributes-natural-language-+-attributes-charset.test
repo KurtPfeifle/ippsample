@@ -1,0 +1,11 @@
+{
+	NAME "RFC 2911 section 3.1.4: attributes-natural-language + attributes-charset"
+	OPERATION Get-Printer-Attributes
+	GROUP operation-attributes-tag
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR charset attributes-charset utf-8
+	ATTR uri printer-uri $uri
+
+	STATUS client-error-bad-request
+	EXPECT !printer-uri-supported
+}

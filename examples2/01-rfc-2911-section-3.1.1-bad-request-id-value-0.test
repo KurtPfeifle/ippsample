@@ -1,0 +1,17 @@
+
+# Test that a request-id value of 0 is not accepted.
+#
+# Required by: RFC 2911 section 3.1.1
+{
+	NAME "RFC 2911 section 3.1.1: Bad request-id value 0"
+	REQUEST-ID 0
+	OPERATION Get-Printer-Attributes
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+
+	STATUS client-error-bad-request
+	EXPECT !printer-uri-supported
+}
+

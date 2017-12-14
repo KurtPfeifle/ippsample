@@ -1,0 +1,14 @@
+
+# Test that the first two attributes must be attributes-charset and
+# attributes-natural-language.
+#
+# Required by: RFC 2911 section 3.1.4
+{
+	NAME "RFC 2911 section 3.1.4: No Operation Attributes"
+	REQUEST-ID random
+	OPERATION Get-Printer-Attributes
+	GROUP operation-attributes-tag
+
+	STATUS client-error-bad-request
+	EXPECT !printer-uri-supported
+}

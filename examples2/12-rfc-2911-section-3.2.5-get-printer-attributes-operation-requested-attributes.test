@@ -1,0 +1,23 @@
+INCLUDE 00-define-uri-regex.test
+
+
+# Test Get-Printer-Attributes operation with requested-attributes
+#
+# Required by: RFC 2911 section 3.2.5
+{
+	NAME "RFC 2911 section 3.2.5: Get-Printer-Attributes Operation (requested-attributes)"
+	OPERATION Get-Printer-Attributes
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR name requesting-user-name $user
+	ATTR mimeMediaType document-format $filetype
+	ATTR keyword requested-attributes printer-uri-supported
+
+	STATUS successful-ok
+
+	EXPECT printer-uri-supported OF-TYPE uri IN-GROUP printer-attributes-tag WITH-ALL-VALUES "$IPP_URI_SCHEME"
+	EXPECT !printer-name
+}
+

@@ -1,0 +1,18 @@
+
+# Test that bad IPP versions are not supported.
+#
+# Required by: RFC 2911 section 3.1.8
+{
+	# The name of the test...
+	NAME "RFC 2911 section 3.1.8: Unsupported IPP version 0.0"
+	VERSION 0.0
+	OPERATION Get-Printer-Attributes
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+
+	STATUS server-error-version-not-supported
+	EXPECT !printer-uri-supported
+}
+

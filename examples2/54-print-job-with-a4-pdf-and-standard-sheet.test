@@ -1,0 +1,41 @@
+INCLUDE 00-define-uri-regex.test
+
+
+{
+	SKIP-IF-DEFINED NOPRINT
+	SKIP-IF-NOT-DEFINED OPTIONAL_POSTSCRIPT
+	SKIP-IF-NOT-DEFINED OPTIONAL_A4_MEDIA
+	SKIP-IF-NOT-DEFINED OPTIONAL_STANDARD_SHEET
+
+	NAME "Print-Job with A4 PDF and Standard Sheet"
+	OPERATION Print-Job
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR name requesting-user-name $user
+	ATTR name job-name "A4 Test Document w/Standard Sheet"
+	ATTR boolean ipp-attribute-fidelity false
+	ATTR name document-name document-a4.ps
+	ATTR keyword compression none
+	ATTR mimeMediaType document-format application/postscript
+	GROUP job-attributes-tag
+	ATTR keyword media $OPTIONAL_A4_MEDIA
+	ATTR keyword job-sheets standard
+	FILE document-a4.ps
+
+	STATUS successful-ok
+	STATUS server-error-job-canceled
+	STATUS server-error-busy REPEAT-MATCH REPEAT-LIMIT 30
+
+	EXPECT job-uri OF-TYPE uri COUNT 1 IN-GROUP job-attributes-tag WITH-VALUE "$IPP_URI_SCHEME"
+	EXPECT job-id OF-TYPE integer COUNT 1 IN-GROUP job-attributes-tag
+	       WITH-VALUE >0
+	EXPECT job-state OF-TYPE unknown|enum COUNT 1 IN-GROUP job-attributes-tag
+	       WITH-VALUE 3,4,5,6,7,8,9
+	EXPECT job-state-reasons OF-TYPE keyword IN-GROUP job-attributes-tag
+	EXPECT ?job-state-message OF-TYPE text IN-GROUP job-attributes-tag
+	EXPECT ?number-of-intervening-jobs OF-TYPE integer
+	       IN-GROUP job-attributes-tag WITH-VALUE >-1
+}
+

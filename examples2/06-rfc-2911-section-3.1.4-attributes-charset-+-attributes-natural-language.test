@@ -1,0 +1,14 @@
+INCLUDE 00-define-uri-regex.test
+
+{
+	NAME "RFC 2911 section 3.1.4: attributes-charset + attributes-natural-language"
+	OPERATION Get-Printer-Attributes
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+
+	STATUS successful-ok
+	EXPECT printer-uri-supported OF-TYPE uri WITH-ALL-VALUES "$IPP_URI_SCHEME"
+}
+

@@ -1,0 +1,22 @@
+
+{
+	SKIP-IF-NOT-DEFINED OPTIONAL_CREATE_JOB
+	SKIP-IF-NOT-DEFINED OPTIONAL_SEND_DOCUMENT
+	SKIP-PREVIOUS-ERROR yes
+
+	NAME "Send-Document missing last-document: Send-Document Operation"
+	OPERATION Send-Document
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR integer job-id $job-id
+	ATTR name requesting-user-name $user
+	ATTR name document-name $filename
+	ATTR keyword compression none
+	ATTR mimeMediaType document-format $filetype
+	FILE $filename
+
+	STATUS client-error-bad-request
+}
+

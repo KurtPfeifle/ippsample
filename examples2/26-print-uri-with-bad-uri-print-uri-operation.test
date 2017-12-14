@@ -1,0 +1,30 @@
+
+# Test Print-URI operation with bad document-uri
+#
+# Defined by: RFC 2911 section 3.2.2
+{
+	SKIP-IF-NOT-DEFINED OPTIONAL_PRINT_URI
+	SKIP-IF-NOT-DEFINED document-uri
+
+	NAME "Print-URI with bad URI: Print-URI Operation"
+	OPERATION Print-URI
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR name requesting-user-name $user
+	ATTR name job-name $filename
+	ATTR boolean ipp-attribute-fidelity false
+	ATTR name document-name $filename
+	ATTR keyword compression none
+	ATTR uri document-uri "bogus://bogus"
+
+	STATUS client-error-uri-scheme-not-supported
+
+	EXPECT !job-uri
+	EXPECT !job-id
+	EXPECT !job-state
+	EXPECT !job-state-reasons
+	EXPECT !job-state-message
+}
+

@@ -1,0 +1,21 @@
+
+# Test Validate-Job operation
+#
+# Required by: RFC 2911 section 3.2.3
+{
+	NAME "RFC 2911 section 3.2.3: Validate-Job Operation"
+	OPERATION Validate-Job
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR name requesting-user-name $user
+	ATTR name job-name $filename
+	ATTR boolean ipp-attribute-fidelity false
+	ATTR name document-name $filename
+	ATTR keyword compression none
+	ATTR mimeMediaType document-format $filetype
+
+	STATUS successful-ok
+}
+

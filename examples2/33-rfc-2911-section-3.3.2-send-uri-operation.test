@@ -1,0 +1,24 @@
+
+{
+	SKIP-IF-NOT-DEFINED OPTIONAL_CREATE_JOB
+	SKIP-IF-NOT-DEFINED OPTIONAL_SEND_URI
+	SKIP-IF-NOT-DEFINED document-uri
+	SKIP-PREVIOUS-ERROR yes
+
+	NAME "RFC 2911 section 3.3.2: Send-URI Operation"
+	OPERATION Send-URI
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR integer job-id $job-id
+	ATTR name requesting-user-name $user
+	ATTR boolean last-document true
+	ATTR name document-name $filename
+	ATTR keyword compression none
+	ATTR uri document-uri $document-uri
+
+	STATUS successful-ok
+	STATUS server-error-job-canceled
+}
+

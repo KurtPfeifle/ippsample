@@ -1,0 +1,15 @@
+
+# Test that printer operations require the printer-uri operation attribute.
+#
+# Required by: RFC 2911 section 3.2
+{
+	NAME "RFC 2911 section 3.2: No printer-uri operation attribute"
+	OPERATION Get-Printer-Attributes
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+
+	STATUS client-error-bad-request
+	EXPECT !printer-uri-supported
+}
+

@@ -1,0 +1,62 @@
+INCLUDE 00-define-uri-regex.test
+
+
+# Test Get-Jobs operation
+#
+# Required by: RFC 2911 section 3.2.6
+{
+	SKIP-IF-DEFINED PRINT_JOB_COMPLETED
+
+	NAME "RFC 2911 section 3.2.6: Get-Jobs Operation (my-jobs)"
+	OPERATION Get-Jobs
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR name requesting-user-name $user
+	ATTR boolean my-jobs true
+
+	STATUS successful-ok
+	EXPECT ?job-id OF-TYPE integer IN-GROUP job-attributes-tag COUNT 1 WITH-VALUE >0
+	EXPECT ?job-uri OF-TYPE uri IN-GROUP job-attributes-tag COUNT 1 WITH-VALUE "$IPP_URI_SCHEME"
+	EXPECT !job-printer-uri
+	EXPECT !job-more-info
+	EXPECT !job-name
+	EXPECT !job-originating-user-name
+	EXPECT !job-state
+	EXPECT !job-state-reasons
+	EXPECT !job-state-message
+	EXPECT !job-detailed-status-messages
+	EXPECT !number-of-documents
+	EXPECT !output-device-assigned
+	EXPECT !time-at-creation
+	EXPECT !time-at-processing
+	EXPECT !time-at-completed
+	EXPECT !job-printer-up-time
+	EXPECT !date-time-at-creation
+	EXPECT !date-time-at-processing
+	EXPECT !date-time-at-completed
+	EXPECT !number-of-intervening-jobs
+	EXPECT !job-message-from-operator
+	EXPECT !job-k-octets
+	EXPECT !job-impressions
+	EXPECT !job-media-sheets
+	EXPECT !job-k-octets-processed
+	EXPECT !job-impressions-completed
+	EXPECT !job-media-sheets-completed
+
+	EXPECT !copies
+	EXPECT !finishings
+	EXPECT !job-hold-until
+	EXPECT !job-priority
+	EXPECT !job-sheets
+	EXPECT !media
+	EXPECT !multiple-document-handling
+	EXPECT !number-up
+	EXPECT !orientation-requested
+	EXPECT !pages-ranges
+	EXPECT !print-quality
+	EXPECT !printer-resolution
+	EXPECT !sides
+}
+

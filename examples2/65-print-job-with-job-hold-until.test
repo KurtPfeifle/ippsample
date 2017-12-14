@@ -1,0 +1,37 @@
+INCLUDE 00-define-uri-regex.test
+
+
+# Test hold/release in the context of Print-Job w/job-hold-until + Release-Job
+{
+	SKIP-IF-NOT-DEFINED OPTIONAL_HOLD_JOB
+
+	NAME "Print-Job with job-hold-until"
+	OPERATION Print-Job
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR name requesting-user-name $user
+	ATTR name job-name "Test Document w/Hold"
+	ATTR name document-name $filename
+	ATTR keyword compression none
+	ATTR mimeMediaType document-format $filetype
+	GROUP job-attributes-tag
+	ATTR keyword job-hold-until indefinite
+	FILE $filename
+
+	STATUS successful-ok
+	STATUS server-error-job-canceled
+	STATUS server-error-busy REPEAT-MATCH REPEAT-LIMIT 30
+
+	EXPECT job-uri OF-TYPE uri COUNT 1 IN-GROUP job-attributes-tag WITH-VALUE "$IPP_URI_SCHEME"
+	EXPECT job-id OF-TYPE integer COUNT 1 IN-GROUP job-attributes-tag
+	       WITH-VALUE >0
+	EXPECT job-state OF-TYPE unknown|enum COUNT 1 IN-GROUP job-attributes-tag
+	       WITH-VALUE 3,4,5,6,7,8,9
+	EXPECT job-state-reasons OF-TYPE keyword IN-GROUP job-attributes-tag
+	EXPECT ?job-state-message OF-TYPE text IN-GROUP job-attributes-tag
+	EXPECT ?number-of-intervening-jobs OF-TYPE integer
+	       IN-GROUP job-attributes-tag WITH-VALUE >-1
+}
+

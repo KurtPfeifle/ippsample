@@ -1,0 +1,17 @@
+
+{
+	SKIP-IF-NOT-DEFINED OPTIONAL_HOLD_JOB
+
+	NAME "Release-Job"
+	OPERATION Release-Job
+	GROUP operation-attributes-tag
+	ATTR charset attributes-charset utf-8
+	ATTR naturalLanguage attributes-natural-language en
+	ATTR uri printer-uri $uri
+	ATTR integer job-id $job-id
+	ATTR name requesting-user-name $user
+
+	STATUS successful-ok
+	STATUS client-error-not-possible
+}
+

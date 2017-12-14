@@ -22,7 +22,7 @@ script:
   - ./linuxdeployqt*.AppImage ./appdir/usr/bin/ippfind -bundle-non-qt-libs
   - ./linuxdeployqt*.AppImage ./appdir/usr/bin/ippproxy -bundle-non-qt-libs
   - ./linuxdeployqt*.AppImage ./appdir/usr/bin/ipptool -bundle-non-qt-libs
-  - ./linuxdeployqt*.AppImage ./appdir/usr/bin/ipptransform -bundle-non-qt-libs
+  - #./linuxdeployqt*.AppImage ./appdir/usr/bin/ipptransform -bundle-non-qt-libs
   - #./linuxdeployqt*.AppImage ./appdir/usr/bin/ipptransform3d -bundle-non-qt-libs
   - # Bundle examples/ and test/
   - mkdir -p ./appdir/usr/share/cups/ipptool/ ; cp -r examples/* test/* ./appdir/usr/share/cups/ipptool/ ; cp -r examples2/* test/* ./appdir/usr/share/cups/ipptool/

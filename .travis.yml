@@ -10,7 +10,7 @@ script:
   - ./configure --prefix=/usr
   - make -j$(nproc)
   - make BUILDROOT=$(readlink -f appdir) install ; find appdir/
-  - rm -rf appdir/usr/include/cups/ # Do not bundle developer stuff
+  - # rm -rf appdir/usr/include/cups/ # Do not bundle developer stuff
   - sudo mv  ./appdir/usr/sbin/* ./appdir/usr/bin/ ; rm -rf ./appdir/usr/sbin/ # AppRun does not put usr/sbin/ on $PATH
   - mkdir -p ./appdir/usr/share/applications/ ; cp appimage/ippserver.desktop ./appdir/usr/share/applications/
   - mkdir -p ./appdir/usr/share/icons/hicolor/512x512/apps/ ; cp appimage/printer.png ./appdir/usr/share/icons/hicolor/512x512/apps/

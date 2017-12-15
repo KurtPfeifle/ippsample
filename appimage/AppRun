@@ -77,8 +77,9 @@ fi
 
 if [ x"$1" == "xhtml" ] ; then
     shift
-    htmlfile=$(find "$HERE/usr/share/doc/html/ipptool" -name "${1}.html" -o -name "${1}")
-    xdg-open $htmlfile
+    htmlfile=$(find "$HERE/usr/share/doc/html/ipptool" -name "${1}.html" -o -name "${1}" | head -n 1)
+    htmlfile=$( basename $htmlfile )
+    xdg-open $HERE/usr/share/doc/html/ipptool/$htmlfile
     exit $?
 fi
 

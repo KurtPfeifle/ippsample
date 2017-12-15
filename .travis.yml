@@ -8,7 +8,8 @@ install:
 
 script:
   - ./configure --prefix=/usr
-  - make -j$(nproc)
+  - #make -j$(nproc) # See if it compiles without -jN
+  - make -j1
   - make BUILDROOT=$(readlink -f appdir) install ; find appdir/
   - # rm -rf appdir/usr/include/cups/ # Do not bundle developer stuff
   - sudo mv  ./appdir/usr/sbin/* ./appdir/usr/bin/ ; rm -rf ./appdir/usr/sbin/ # AppRun does not put usr/sbin/ on $PATH

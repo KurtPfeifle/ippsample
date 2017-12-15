@@ -22,62 +22,68 @@ if [ "x$1" == "xhelp" ] ; then
     echo "  for Linux ['One App == One File'] for easy availabilty of"
     echo "  this IPP testing toolkit across all major Linux distributions.)"
     echo ""
-    echo " Usage: $0  help"
-    echo " ------            # This message"
     echo ""
-    echo "        $0  ippserver|ippfind|ipptool|ippproxy"
-    echo "                   # Run the named sub-command"
+    echo " Usage:  $0  help"
+    echo " ------             # This message"
     echo ""
-    echo "        $0  listman"
-    echo "                   # List available, embedded manual pages"
+    echo "         $0  ippserver|ippfind|ipptool|ippproxy"
+    echo "                    # Run the named sub-command"
     echo ""
-    echo "        $0  man ippserver|ippfind|ipptool|ipptoolfile|ippproxy"
-    echo "                   # Display embedded manual page(s)"
+    echo "         $0  listman"
+    echo "                    # List available, embedded manual pages"
     echo ""
-    echo "        $0  listhtml"
-    echo "                   # List as HTML embedded manual page(s)"
+    echo "         $0  man ippserver|ippfind|ipptool|ipptoolfile|ippproxy"
+    echo "                    # Display embedded manual page(s)"
     echo ""
-    echo "        $0  html ippserver|ippfind|ipptool|ipptoolfile|ippproxy"
-    echo "                   # Use browser to display embedded manual page(s)"
+    echo "         $0  listhtml"
+    echo "                    # List as HTML embedded manual page(s)"
     echo ""
-    echo "        $0  listtests"
-    echo "                   # List available, embedded IPP test files"
+    echo "         $0  html ippserver|ippfind|ipptool|ipptoolfile|ippproxy"
+    echo "                    # Use browser to display embedded manual page(s)"
     echo ""
-    echo "        $0  cat <testfile>"
-    echo "                   # Print contents of named IPP test file"
+    echo "         $0  listtests"
+    echo "                    # List available, embedded IPP test files"
     echo ""
-    echo "        $0  listdocs"
-    echo "                   # List available, builtin test documents"
+    echo "         $0  cat <testfile>"
+    echo "                    # Print contents of named IPP test file"
     echo ""
-    echo "        $0  --appimage-help"
-    echo "                   # Show available AppImage options"
-    exec echo ""
+    echo "         $0  listdocs"
+    echo "                    # List available, builtin test documents"
+    echo ""
+    echo "         $0  --appimage-help"
+    echo "                    # Show available AppImage options"
+    echo ""
+    exit $?
 fi
 
 
 if [ x"$1" == "xlistman" ] ; then
     cd "$HERE/usr/share/man"
-    exec find man* -type f | sed 's#^# man #;s#man man# man #;s#/# #;s#\.[0-9]$##'
+    echo ""
+    find man* -type f | sed 's#^# man #;s#man man# man #;s#/# #;s#\.[0-9]$##'
+    echo ""
     exit $?
 fi
 
 
 if [ x"$1" == "xman" ] ; then
-    export MANPATH="$HERE/usr/share/man:$MANPATH" ; exec "$@"
-    exit $?
+    export MANPATH="$HERE/usr/share/man:$MANPATH"
+    exec "$@"
 fi
 
 
 if [ x"$1" == "xlisthtml" ] ; then
     cd "$HERE/usr/share/doc/html/ipptool"
-    exec find -type f -name "*.html"
+    echo ""
+    find -type f -name "*.html" | sed 's#^./#  html #'
+    echo ""
     exit $?
 fi
 
 
 if [ x"$1" == "xhtml" ] ; then
     shift
-    htmlfile=$(find "$HERE/usr/share/doc/html/ipptool" -name "${1}.html" -o -name "${1}" | head -n 1)
+    htmlfile=$( find "$HERE/usr/share/doc/html/ipptool" -type f -name "${1}.html" -o -name "${1}" | head -n 1 )
     htmlfile=$( basename $htmlfile )
     xdg-open $HERE/usr/share/doc/html/ipptool/$htmlfile
     exit $?
@@ -86,8 +92,8 @@ fi
 
 if [ x"$1" == "xcat" ] ; then
     shift 1
-    tst=$( basename $@ )
-    cat $HERE/usr/share/cups/ipptool/$tst
+    testfile=$( basename $@ )
+    cat $HERE/usr/share/cups/ipptool/$testfile
     exit $?
 fi
 
@@ -137,7 +143,6 @@ if [ x"$1" == "xlisttests" ] ; then
     shift 1
     cd $HERE/usr/share/cups/ipptool
     exec ls *.test
-    exit $?
 fi
 
 

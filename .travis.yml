@@ -39,7 +39,8 @@ after_success:
   - curl --upload-file ./ippserver*.AppImage https://transfer.sh/ippsample-git.$(git rev-parse --short HEAD)-x86_64.AppImage
   - wget -c https://github.com/probonopd/uploadtool/raw/master/upload.sh
   - ls -lh ./*.AppImage
-  - bash ./upload.sh ./*.AppImage
+  - mv ./{ippserver,ippsample}-x86_64.AppImage
+  - bash ./upload.sh ./ippsample-x86_64.AppImage
 
 branches:
   only:

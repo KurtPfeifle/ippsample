@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# The purpose of this custom AppRun script is
-# to allow symlinking the AppImage and invoking
-# the corresponding binary depending on which
-# symlink was used to invoke the AppImage
+# The purpose of this custom AppRun script is to enable
+# symlinking the AppImage and invoking the corresponding
+# binary depending on which symlink was used to invoke
+# the AppImage.
+# It also provides some additional help parameters in
+# order to allow faster familiarization with the tool.
 
 HERE="$(dirname "$(readlink -f "${0}")")"
 

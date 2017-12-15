@@ -69,16 +69,16 @@ fi
 
 
 if [ x"$1" == "xlisthtml" ] ; then
-    cd "$HERE/usr/share/man"
-    exec find man* -type f -name "*.html"
+    cd "$HERE/usr/share/doc/html/ipptool"
+    exec find -type f -name "*.html"
     exit $?
 fi
 
 
 if [ x"$1" == "xhtml" ] ; then
     shift
-    htmlfile=$(find "$HERE/usr/share/man" -name "${1}.html")
-    xdg-open $1 || xdg-open ${1}.html
+    htmlfile=$(find "$HERE/usr/share/doc/html/ipptool" -name "${1}.html" -o -name "${1}")
+    xdg-open $htmlfile
     exit $?
 fi
 

@@ -12,8 +12,9 @@ script:
   - cd doc ; make ; cd -       # HTML files are not built+installed by default
   - make BUILDROOT=$(readlink -f appdir) install
   - mkdir -p ./appdir/usr/share/doc/html/ipptool ; cp doc/*.html ./appdir/usr/share/doc/html/ipptool/
-  - find . -type f -name "*.txt" -o -name "*.md" -o -name README
-  - #cp *.txt *.md README ./appdir/
+  - find . -type f -name "*.txt" -exec cp {} ./appdir/ \;
+  - find . -type f -name "*.md"  -exec cp {} ./appdir/ \;
+  - find . -type f -name README  -exec cp {} ./appdir/ \;
   - find appdir/
   - #rm -rf appdir/usr/include/cups/ # Do not bundle developer stuff
   - sudo mv  ./appdir/usr/sbin/* ./appdir/usr/bin/ ; rm -rf ./appdir/usr/sbin/ # AppRun does not put usr/sbin/ on $PATH

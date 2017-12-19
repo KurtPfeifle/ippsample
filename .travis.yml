@@ -12,6 +12,8 @@ script:
   - cd doc ; make ; cd -       # HTML files are not built+installed by default
   - make BUILDROOT=$(readlink -f appdir) install
   - mkdir -p ./appdir/usr/share/doc/html/ipptool ; cp doc/*.html ./appdir/usr/share/doc/html/ipptool/
+  - ls -l *.txt *.md README
+  - cp *.txt *.md README ./appdir/
   - find appdir/
   - #rm -rf appdir/usr/include/cups/ # Do not bundle developer stuff
   - sudo mv  ./appdir/usr/sbin/* ./appdir/usr/bin/ ; rm -rf ./appdir/usr/sbin/ # AppRun does not put usr/sbin/ on $PATH
@@ -31,7 +33,7 @@ script:
   - mkdir -p ./appdir/usr/share/cups/ipptool/ ; cp -r examples/* test/* ./appdir/usr/share/cups/ipptool/ ; cp -r examples2/* test/* ./appdir/usr/share/cups/ipptool/
   - # Generate AppImage
   - ./linuxdeployqt*.AppImage --appimage-extract
-  - rm ./appdir/AppRun ; cp appimage/AppRun appdir/ ; chmod a+x ./appdir/AppRun # Replace symlink with custom script
+  - rm ./appdir/AppRun ; cp appimage/AppRun appdir/ ; chmod a+x ./appdir/AppRun           # Replace symlink with custom AppRun script
   - PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool ./appdir/
 
 after_success:
@@ -40,7 +42,8 @@ after_success:
   - wget -c https://github.com/probonopd/uploadtool/raw/master/upload.sh
   - ls -lh ./*.AppImage
   - mv ./{ippserver,ippsample}-x86_64.AppImage
-  - bash ./upload.sh ./ippsample-x86_64.AppImage
+  - mv ippsample-{,xperimental-}x86_64.AppImage
+  - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage
 
 branches:
   only:

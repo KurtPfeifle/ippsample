@@ -12,7 +12,7 @@ script:
   - cd doc ; make ; cd -       # HTML files are not built+installed by default
   - make BUILDROOT=$(readlink -f appdir) install
   - mkdir -p ./appdir/usr/share/doc/html/ipptool ; cp doc/*.html ./appdir/usr/share/doc/html/ipptool/
-  - pwd ; ls -l .  # *.txt *.md README
+  - find . -type f -name "*.txt" -o -name "*.md" -o -name README
   - #cp *.txt *.md README ./appdir/
   - find appdir/
   - #rm -rf appdir/usr/include/cups/ # Do not bundle developer stuff

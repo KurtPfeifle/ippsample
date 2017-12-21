@@ -4,7 +4,7 @@ sudo: require
 dist: trusty
 
 install:
-    - sudo apt-get -y install autoconf build-essential avahi-daemon avahi-utils libavahi-client-dev libgnutls28-dev libjpeg-dev libnss-mdns libpng-dev zlib1g-dev
+    - sudo apt-get -y install coreutils autoconf build-essential avahi-daemon avahi-utils libavahi-client-dev libgnutls28-dev libjpeg-dev libnss-mdns libpng-dev zlib1g-dev
 
 script:
   - ./configure --prefix=/usr
@@ -44,9 +44,15 @@ after_success:
   - ls -lh ./*.AppImage
   - mv ./{ippserver,ippsample}-x86_64.AppImage
   - mv ippsample-{,xperimental-}x86_64.AppImage
+  - sha512sum ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.sha512
+  - md5sum ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage
+  - bash ./upload.sh ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
   - mv ./ippsample-xperimental-x86_64.AppImage ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage
+  - sha512sum ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
+  - md5sum ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage
+  - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage.sha512
 
 branches:
   only:

@@ -39,7 +39,11 @@ script:
 
 after_success:
   - find ./appdir -executable -type f -exec ldd {} \; | grep " => /usr" | cut -d " " -f 2-3 | sort | uniq
-  - curl --upload-file ./ippserver*.AppImage https://transfer.sh/ippsample-git.$(git rev-parse --short HEAD)-x86_64.AppImage
+  - find . -name "ippserver*.AppImage
+  - mv ./ippserver*.AppImage ./ippsample-xperimental-x86_64.AppImage
+  - cp ./ippsample-xperimental{,-$(git rev-parse --short HEAD)}-x86_64.AppImage
+  - curl --upload-file ./ippsample-xperimental-x86_64.AppImage                   https://transfer.sh/ippsample-xperimental-x86_64.AppImage
+  - curl --upload-file ./ippsample-$(git rev-parse --short HEAD)-x86_64.AppImage https://transfer.sh/ippsample-$(git rev-parse --short HEAD)-x86_64.AppImage
   - wget -c https://github.com/probonopd/uploadtool/raw/master/upload.sh
   - ls -lh ./*.AppImage
   - mv ./{ippserver,ippsample}-x86_64.AppImage

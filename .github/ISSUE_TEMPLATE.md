@@ -1,6 +1,6 @@
 ### Prerequisites
 
-<-- The more checkmarks you can set below, the higher is the probability that your issue is processed soon: -->
+<!-- The more checkmarks you can set below, the higher is the probability that your issue is processed soon: -->
 
 - [ ] I have written a descriptive issue title.
 - [ ] I have checked: this issue is specific to the AppImage version of the IPP Sample software; it does not occur with a "standard" installed package (.rpm, .deb, ...).

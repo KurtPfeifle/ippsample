@@ -45,6 +45,8 @@ after_success:
   - mv ./{ippserver,ippsample}-x86_64.AppImage
   - mv ippsample-{,xperimental-}x86_64.AppImage
   - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage
+  - mv ./ippsample-xperimental-x86_64.AppImage ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage
+  - bash ./upload.sh ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage
 
 branches:
   only:

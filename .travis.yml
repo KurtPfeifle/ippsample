@@ -35,7 +35,7 @@ script:
   - # Generate AppImage
   - ./linuxdeployqt*.AppImage --appimage-extract
   - rm ./appdir/AppRun ; cp appimage/AppRun appdir/ ; chmod a+x ./appdir/AppRun           # Replace symlink with custom AppRun script
-  - PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool ./appdir/
+  - PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool -v -u -g -n ./appdir/
 
 after_success:
   - find ./appdir -executable -type f -exec ldd {} \; | grep " => /usr" | cut -d " " -f 2-3 | sort | uniq
@@ -45,14 +45,14 @@ after_success:
   - mv ./{ippserver,ippsample}-x86_64.AppImage
   - mv ippsample-{,xperimental-}x86_64.AppImage
   - sha512sum ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.sha512
-  - md5sum ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.md5
+  - md5sum    ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage
-  - bash ./upload.sh ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
+  - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage.sha512
   - mv ./ippsample-xperimental-x86_64.AppImage ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage
   - sha512sum ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
-  - md5sum ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage.md5
+  - md5sum    ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage
-  - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage.sha512
+  - bash ./upload.sh ./ippsample-xperimental-git.$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
 
 branches:
   only:

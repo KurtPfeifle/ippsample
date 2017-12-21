@@ -35,7 +35,7 @@ script:
   - # Generate AppImage
   - ./linuxdeployqt*.AppImage --appimage-extract
   - rm ./appdir/AppRun ; cp appimage/AppRun appdir/ ; chmod a+x ./appdir/AppRun           # Replace symlink with custom AppRun script
-  - PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool -v -u -g -n ./appdir/
+  - PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool -v -u 'gh-releases-zsync|AppImage|AppImageUpdate|continuous|ipptool-xperimental-*x86_64.AppImage.zsync' -n ./appdir/
 
 after_success:
   - find ./appdir -executable -type f -exec ldd {} \; | grep " => /usr" | cut -d " " -f 2-3 | sort | uniq

@@ -190,10 +190,10 @@ if [ x"$1" == "xreadme" -o x"$1" == "x--readme" ] ; then
 fi
 
 
-if [ x"$1" == "xlisthtml"  -o x"$1" == "x--listhtml" ] ; then
+if [ x"$1" == "xlisthtml" -o x"$1" == "x--listhtml" ] ; then
     cd "$HERE"
     echo ""
-    find -type f -name "*.html" | sed 's#^./#  html #'
+    find . -type f -name "*.html" | sed 's#^./#  html #'
     echo ""
     exit $?
 fi

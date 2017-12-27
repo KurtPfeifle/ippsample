@@ -49,8 +49,8 @@ after_success:
   - mv ./ippserver*.AppImage.zsync ./ippsample-xperimental-x86_64.AppImage.zsync
   - cp ./ippsample-xperimental{,-$(git rev-parse --short HEAD)}-x86_64.AppImage
   - cp ./ippsample-xperimental{,-$(git rev-parse --short HEAD)}-x86_64.AppImage.zsync
-  - curl --upload-file ./ippsample-xperimental-x86_64.AppImage                   https://transfer.sh/ippsample-xperimental-x86_64.AppImage
-  - curl --upload-file ./ippsample-$(git rev-parse --short HEAD)-x86_64.AppImage https://transfer.sh/ippsample-$(git rev-parse --short HEAD)-x86_64.AppImage
+  - curl --upload-file ./ippsample-xperimental-x86_64.AppImage                               https://transfer.sh/ippsample-xperimental-x86_64.AppImage
+  - curl --upload-file ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage https://transfer.sh/ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage
   - wget -c https://github.com/probonopd/uploadtool/raw/master/upload.sh
   - ls -lh ./*.AppImage
   - sha512sum ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.sha512
@@ -64,7 +64,7 @@ after_success:
   - md5sum    ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
-  - bash ./upload.sh ./ippsample-*$(git rev-parse --short HEAD)-x86_64.AppImage.zsync
+  - bash ./upload.sh ./ippsample-xperimental-*$(git rev-parse --short HEAD)-x86_64.AppImage.zsync
   - find . -name "*.AppImage*"
 
 branches:

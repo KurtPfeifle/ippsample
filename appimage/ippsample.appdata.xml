@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+	<id>ippsample</id>
+	<metadata_license>Apache-2.0</metadata_license>
+	<project_license>Apache-2.0</project_license>
+	<name>ippsample</name>
+	<summary>Sample implementations for IPP Server, IPP Clients, IPP Printers, IPP Find tool and IPP Proxies</summary>
+	<description>
+		<p>"ippfind": The ippfind program implements Bonjour/DNS-SD discovery of IPP printers and can be used to find and test specific printers. Among other things, it is used as part of the IPP Everywhere Printer Self-Certification test tools.
+"ipptool": The ipptool program implements a generic IPP Client interface that allows a user to send different IPP requests and act based on the response from the Printer. Among other things, it is used as part of the IPP Everywhere Printer Self-Certification test tools.
+"ippproxy": The ippproxy program implements a generic IPP Proxy interface that allows you to connect a local IPP or PCL printer to an IPP Infrastructure Printer such as the ippserver program.
+"ippserver": The ippserver program implements a generic IPP Printer interface that allows you to host shared printers using the IPP Shared Infrastructure Extensions as well as support local printing or document processing.
+
+"ipptransform": The ipptransform program is a generic file conversion utility that is used primarily with ippserver to support rasterization of JPEG and PDF documents for IPP Everywhere and HP PCL printers.</p>
+	</description>
+	<launchable type="desktop-id">ippsample.desktop</launchable>
+	<url type="homepage">http://istopwg.github.io/ippsample/</url>
+	<screenshots>
+		<screenshot type="default">
+			<image>https://github.com/KurtPfeifle/ippsample/raw/master/appimage/ippsample-screenshot.jpeg</image>
+		</screenshot>
+	</screenshots>
+	<provides>
+		<id>ippsample.desktop</id>
+	</provides>
+</component>

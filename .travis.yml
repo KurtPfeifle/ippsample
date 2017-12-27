@@ -5,6 +5,7 @@ dist: trusty
 
 before_install:
     - sudo add-apt-repository -y ppa:ximion/packagekit
+    - sudo apt-get update
 
 install:
     - sudo apt-get -y install appstream coreutils autoconf build-essential avahi-daemon avahi-utils libavahi-client-dev libgnutls28-dev libjpeg-dev libnss-mdns libpng-dev zlib1g-dev

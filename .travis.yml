@@ -3,6 +3,9 @@ compiler: gcc
 sudo: require
 dist: trusty
 
+before_install:
+    - sudo add-apt-repository ppa:ximion/packagekit
+
 install:
     - sudo apt-get -y install appstream coreutils autoconf build-essential avahi-daemon avahi-utils libavahi-client-dev libgnutls28-dev libjpeg-dev libnss-mdns libpng-dev zlib1g-dev
 
@@ -49,6 +52,7 @@ after_success:
   - ls -lh ./*.AppImage
   - mv ./{ippserver,ippsample}-x86_64.AppImage
   - mv ippsample-{,xperimental-}x86_64.AppImage
+  - find . -name "*.AppImage*"
   - sha512sum ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.sha512
   - md5sum    ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage
@@ -60,6 +64,7 @@ after_success:
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.zsync
+  - bash ./upload.sh ./ippsample-*$(git rev-parse --short HEAD)-x86_64.AppImage.zsync
 
 branches:
   only:

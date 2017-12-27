@@ -1,3 +1,8 @@
+% Continuous build (AppImage)
+% Kurt Pfeifle
+%
+
+
 # First *`ippsample`* AppImage
 
 This is my first shot at building an AppImage for the *Sample IPP (Internet Printing Protocol) Server* with *assorted helper utilities*. The code is provided by the [ISTO Printer Working Group (PWG)](https://www.pwg.org), which I forked for this building project. Hopefully, one day soon I can create an acceptable pull request for [upstream](https://github.com/istopwg/ippsample).

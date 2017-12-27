@@ -53,11 +53,13 @@ after_success:
   - md5sum    ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage
   - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage.sha512
+  - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.zsync
   - mv ./ippsample-xperimental-x86_64.AppImage ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage
   - sha512sum ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
   - md5sum    ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
+  - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.zsync
 
 branches:
   only:

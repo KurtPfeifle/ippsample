@@ -24,7 +24,7 @@ script:
   - sudo mv  ./appdir/usr/sbin/* ./appdir/usr/bin/ ; rm -rf ./appdir/usr/sbin/ # AppRun does not put usr/sbin/ on $PATH
   - mkdir -p ./appdir/usr/share/applications/ ; cp ./appimage/ippserver.desktop ./appdir/usr/share/applications/
   - mkdir -p ./appdir/usr/share/icons/hicolor/512x512/apps/ ; cp ./appimage/printer.png ./appdir/usr/share/icons/hicolor/512x512/apps/
-  - mkdir -p ./appdir/usr/share/metainfo ; cp ./appimage/appimage/ippsample.appdata.xml ./appdir/usr/share/metainfo/
+  - mkdir -p ./appdir/usr/share/metainfo ; cp ./appimage/ippsample.appdata.xml ./appdir/usr/share/metainfo/
   - wget -c "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
   - chmod a+x linuxdeployqt*.AppImage
   - ./linuxdeployqt*.AppImage --appimage-version
@@ -40,33 +40,34 @@ script:
   - # Generate AppImage
   - ./linuxdeployqt*.AppImage --appimage-extract
   - rm ./appdir/AppRun ; cp appimage/AppRun appdir/ ; chmod a+x ./appdir/AppRun           # Replace symlink with custom AppRun script
-  - PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool -v -u 'gh-releases-zsync|KurtPfeifle|ippsample|continuous|ippsample-xperimental-*x86_64.AppImage.zsync' -n ./appdir/
+  - PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool -v -u 'gh-releases-zsync|KurtPfeifle|ippsample|continuous|ippsample-*x86_64.AppImage.zsync' -n ./appdir/
 
 after_success:
   - find ./appdir -executable -type f -exec ldd {} \; | grep " => /usr" | cut -d " " -f 2-3 | sort | uniq
   - find . -name "ippserver*.AppImage"
-  - mv ./ippserver*.AppImage ./ippsample-xperimental-x86_64.AppImage
+  - mv ./ippserver*.AppImage       ./ippsample-xperimental-x86_64.AppImage
+  - mv ./ippserver*.AppImage.zsync ./ippsample-xperimental-x86_64.AppImage.zsync
   - cp ./ippsample-xperimental{,-$(git rev-parse --short HEAD)}-x86_64.AppImage
-  - curl --upload-file ./ippsample-xperimental-x86_64.AppImage                   https://transfer.sh/ippsample-xperimental-x86_64.AppImage
-  - curl --upload-file ./ippsample-$(git rev-parse --short HEAD)-x86_64.AppImage https://transfer.sh/ippsample-$(git rev-parse --short HEAD)-x86_64.AppImage
+  - cp ./ippsample-xperimental{,-$(git rev-parse --short HEAD)}-x86_64.AppImage.zsync
+  - curl --upload-file ./ippsample-xperimental-x86_64.AppImage                               https://transfer.sh/ippsample-xperimental-x86_64.AppImage
+  - curl --upload-file ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage https://transfer.sh/ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage
   - wget -c https://github.com/probonopd/uploadtool/raw/master/upload.sh
   - ls -lh ./*.AppImage
-  - mv ./{ippserver,ippsample}-x86_64.AppImage
-  - mv ippsample-{,xperimental-}x86_64.AppImage
-  - find . -name "*.AppImage*"
   - sha512sum ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.sha512
   - md5sum    ./ippsample-xperimental-x86_64.AppImage > ./ippsample-xperimental-x86_64.AppImage.md5
+  - find . -name "*.AppImage*"
   - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage
   - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage.sha512
+  - bash ./upload.sh ./ippsample-xperimental-x86_64.AppImage.zsync
   - mv ./ippsample-xperimental-x86_64.AppImage ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage
   - sha512sum ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
   - md5sum    ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage > ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.md5
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage
   - bash ./upload.sh ./ippsample-xperimental-$(git rev-parse --short HEAD)-x86_64.AppImage.sha512
-  - bash ./upload.sh ./ippsample-*$(git rev-parse --short HEAD)-x86_64.AppImage.zsync
+  - bash ./upload.sh ./ippsample-xperimental-*$(git rev-parse --short HEAD)-x86_64.AppImage.zsync
+  - find . -name "*.AppImage*"
 
 branches:
   only:
     - master
-
 

@@ -24,17 +24,16 @@ The tools in this package serve for testing the IPP capabilities of modern print
 
 (The additional *`ipptransform`* and *`ipptransform3d`* tools from the upstream IPP Sample code are not part of the AppImage at this time, sorry.)
 
-The AppImage comes with a custom AppRun providing additional help. Try to run it with *`ippsample-*.AppImage help`* first. Then walk from there, and try:
+The AppImage comes with a custom AppRun providing additional help. Try to run it with *`ippsample-*.AppImage --help`* first. Then walk from there, and try:
 
-    ippsample-x86_64.AppImage listman
-    ippsample-x86_64.AppImage man 1 ipptool
-    ippsample-x86_64.AppImage listhtml
-    ippsample-x86_64.AppImage html api.html
+    ippsample-x86_64.AppImage --listman
+    ippsample-x86_64.AppImage --man 1 ipptool
+    ippsample-x86_64.AppImage --listhtml
+    ippsample-x86_64.AppImage --html api.html
 
 In case you followed the advice above to create symlinks named *`ipp{server,find,tool,proxy}`* pointing to the real AppImage, then of course you can also run (instead any of the above):
 
-    ippserver listman
-    ippserver man 1 ipptool
-    ippfind listhtml
-    ipptool html api.html
-
+    ippserver --listman
+    ippserver --man 1 ipptool
+    ippfind --listhtml
+    ipptool --html api.html

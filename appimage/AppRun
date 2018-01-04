@@ -32,11 +32,11 @@ echo "
  Usage:
  ------
 
+   $ARGV0 ippserver|ippfind|ipptool|ippproxy
+                 # Run the named sub-command
+
    $ARGV0 --help
                  # This message
-
-   $ARGV0 --ippserver|ippfind|ipptool|ippproxy
-                 # Run the named sub-command
 
    $ARGV0 --listtestdoc
                  # List available, builtin test documents

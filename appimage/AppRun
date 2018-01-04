@@ -101,7 +101,7 @@ echo "
 }
 
 
-if [ "x$1" == "xhelp" -o "x$1" == "x--help" ] ; then
+if [ "x$1" == "xhelp" -o "x$1" == "x--help" -o "x$1" == "x-h" ] ; then
     help | less
     exit $?
 fi

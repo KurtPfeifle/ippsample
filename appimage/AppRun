@@ -17,87 +17,92 @@ export CUPS_DATADIR="$HERE/usr/share/cups"
 
 #env
 
+function help() {
+echo "
+ --------------------------------------------------------------------------------------------
+   Sample Implementation of an Internet Printing Protocol (IPP) Server with assorted Tools.
+       Published by ISTO Printer Working Group (PWG), provided here as an AppImage.
+ --------------------------------------------------------------------------------------------
+
+ (This package uses the AppImage software packaging technology
+  for Linux ['One App == One File'] for easy availability of
+  this IPP testing toolkit across all major Linux distributions.)
+
+
+ Usage:
+ ------
+
+   $ARGV0 --help
+                 # This message
+
+   $ARGV0 --ippserver|ippfind|ipptool|ippproxy
+                 # Run the named sub-command
+
+   $ARGV0 --listtestdoc
+                 # List available, builtin test documents
+
+   $ARGV0 --extracttestdoc
+                 # Extract available, builtin test documents
+
+   $ARGV0 --listtest
+                 # List available, embedded IPP test files
+
+   $ARGV0 --cat <testfile>
+                 # Print contents of named IPP test file
+                 # (By re-directing the output you can extract the file)
+
+   $ARGV0 --listman
+                 # List available, embedded manual pages
+
+   $ARGV0 --man ippserver|ippfind|ipptool|ipptoolfile|ippproxy
+                 # Display embedded manual page(s)
+
+   $ARGV0 --listhtml
+                 # List as HTML embedded manual page(s)
+
+   $ARGV0 --html ippserver|ippfind|ipptool|ipptoolfile|ippproxy
+                 # Use browser to display embedded manual page(s)
+
+   $ARGV0 --listfile
+                 # List all files embedded in AppImage
+
+   $ARGV0 --listexe
+                 # List all executables embedded in AppImage
+
+   $ARGV0 --listreadme
+                 # List all READMEs embedded in AppImage
+
+   $ARGV0 --readme <path/to/readme>
+                 # Show content of README embedded in AppImage (for path see \"$ARGV0 listreadme\")
+
+   $ARGV0 --listdir
+                 # List all directories embedded in AppImage
+
+   $ARGV0 --appimage-help
+                 # Show available AppImage options
+
+ ---------------------------------------------------------------------------------------------
+ NOTE: The execution of this AppImage is controlled by a custom AppRun script. The state of
+ this script is experimental and preliminary. Hence it may not work as expected, or miss some
+ functionality. You can hack on this script by unpacking this AppImage into a local sub
+ directory [currently named 'squashfs-root'] with this command:
+
+       $ARGV0 --appimage-extract
+
+ After you're done with your hacks, repackage the AppImage again with this command:
+
+       appimagetool [/path/to/]squashfs-root [/path/to/]ippsample-NEW.AppImage
+
+ Latest versions of tools provided by AppImageKit are always available from
+   * https://github.com/AppImage/AppImageKit/releases/     and
+   * https://github.com/AppImage/AppImageUpdate/releases/
+ ---------------------------------------------------------------------------------------------
+"
+}
+
+
 if [ "x$1" == "xhelp" -o "x$1" == "x--help" ] ; then
-    echo ""
-    echo " --------------------------------------------------------------------------------------------"
-    echo "   Sample Implementation of an Internet Printing Protocol (IPP) Server with assorted Tools."
-    echo "       Published by ISTO Printer Working Group (PWG), provided here as an AppImage."
-    echo " --------------------------------------------------------------------------------------------"
-    echo ""
-    echo " (This package uses the AppImage software packaging technology"
-    echo "  for Linux ['One App == One File'] for easy availability of"
-    echo "  this IPP testing toolkit across all major Linux distributions.)"
-    echo ""
-    echo ""
-    echo " Usage:"
-    echo " ------"
-    echo ""
-    echo "   $ARGV0 --help"
-    echo "                 # This message"
-    echo ""
-    echo "   $ARGV0 --ippserver|ippfind|ipptool|ippproxy"
-    echo "                 # Run the named sub-command"
-    echo ""
-    echo "   $ARGV0 --listtestdoc"
-    echo "                 # List available, builtin test documents"
-    echo ""
-    echo "   $ARGV0 --extracttestdoc"
-    echo "                 # Extract available, builtin test documents"
-    echo ""
-    echo "   $ARGV0 --listtest"
-    echo "                 # List available, embedded IPP test files"
-    echo ""
-    echo "   $ARGV0 --cat <testfile>"
-    echo "                 # Print contents of named IPP test file"
-    echo "                 # (By re-directing the output you can extract the file)"
-    echo ""
-    echo "   $ARGV0 --listman"
-    echo "                 # List available, embedded manual pages"
-    echo ""
-    echo "   $ARGV0 --man ippserver|ippfind|ipptool|ipptoolfile|ippproxy"
-    echo "                 # Display embedded manual page(s)"
-    echo ""
-    echo "   $ARGV0 --listhtml"
-    echo "                 # List as HTML embedded manual page(s)"
-    echo ""
-    echo "   $ARGV0 --html ippserver|ippfind|ipptool|ipptoolfile|ippproxy"
-    echo "                 # Use browser to display embedded manual page(s)"
-    echo ""
-    echo "   $ARGV0 --listfile"
-    echo "                 # List all files embedded in AppImage"
-    echo ""
-    echo "   $ARGV0 --listexe"
-    echo "                 # List all executables embedded in AppImage"
-    echo ""
-    echo "   $ARGV0 --listreadme"
-    echo "                 # List all READMEs embedded in AppImage"
-    echo ""
-    echo "   $ARGV0 --readme <path/to/readme>"
-    echo "                 # Show content of README embedded in AppImage (for path see \"$ARGV0 listreadme\")"
-    echo ""
-    echo "   $ARGV0 --listdir"
-    echo "                 # List all directories embedded in AppImage"
-    echo ""
-    echo "   $ARGV0 --appimage-help"
-    echo "                 # Show available AppImage options"
-    echo ""
-    echo " ---------------------------------------------------------------------------------------------"
-    echo " NOTE: The execution of this AppImage is controlled by a custom AppRun script. The state of"
-    echo " this script is experimental and preliminary. Hence it may not work as expected, or miss some"
-    echo " functionality. You can hack on this script by unpacking this AppImage into a local sub"
-    echo " directory [currently named 'squashfs-root'] with this command:"
-    echo ""
-    echo "       $ARGV0 --appimage-extract"
-    echo ""
-    echo " After you're done with your hacks, repackage the AppImage again with this command:"
-    echo ""
-    echo "       appimagetool [/path/to/]squashfs-root [/path/to/]ippsample.AppImage"
-    echo ""
-    echo " Latest versions of tools provided by AppImageKit are always available from"
-    echo "   * https://github.com/AppImage/AppImageKit/releases/     and"
-    echo "   * https://github.com/AppImage/AppImageUpdate/releases/"
-    echo " ---------------------------------------------------------------------------------------------"
-    echo ""
+    help | less
     exit $?
 fi
 

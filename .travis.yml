@@ -41,7 +41,8 @@ script:
   - ./linuxdeployqt*.AppImage --appimage-extract
   - rm ./appdir/AppRun ; cp appimage/AppRun appdir/ ; chmod a+x ./appdir/AppRun           # Replace symlink with custom AppRun script
   - find ./appdir -name "*.desktop"
-  - cp ./appdir/usr/share/applications/ippsample.desktop ./appdir/
+  - cp ./appdir/usr/share/applications/ippsample.desktop         ./appdir/
+  - cp ./appdir/usr/share/icons/hicolor/512x512/apps/printer.png ./appdir/
   - ARCH=x86_64 PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool -v -u 'gh-releases-zsync|KurtPfeifle|ippsample|continuous|ippsample-*x86_64.AppImage.zsync' -n ./appdir/
 
 after_success:

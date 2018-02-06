@@ -40,6 +40,7 @@ script:
   - # Generate AppImage
   - ./linuxdeployqt*.AppImage --appimage-extract
   - rm ./appdir/AppRun ; cp appimage/AppRun appdir/ ; chmod a+x ./appdir/AppRun           # Replace symlink with custom AppRun script
+  - find ./appdir -name "*.desktop"
   - PATH=./squashfs-root/usr/bin:$PATH ./squashfs-root/usr/bin/appimagetool -v -u 'gh-releases-zsync|KurtPfeifle|ippsample|continuous|ippsample-*x86_64.AppImage.zsync' -n ./appdir/
 
 after_success:

@@ -1,9 +1,10 @@
 /*
  * Threading primitives for CUPS.
  *
- * Copyright 2009-2017 by Apple Inc.
+ * Copyright © 2009-2018 by Apple Inc.
  *
- * Licensed under Apache License v2.0.  See the file "LICENSE" for more information.
+ * Licensed under Apache License v2.0.  See the file "LICENSE" for more
+ * information.
  */
 
 /*
@@ -50,8 +51,16 @@ _cupsCondWait(_cups_cond_t  *cond,	/* I - Condition */
   {
     struct timespec abstime;		/* Timeout */
 
-    abstime.tv_sec  = (long)timeout;
-    abstime.tv_nsec = (long)(1000000000 * (timeout - (long)timeout));
+    clock_gettime(CLOCK_REALTIME, &abstime);
+
+    abstime.tv_sec  += (long)timeout;
+    abstime.tv_nsec += (long)(1000000000 * (timeout - (long)timeout));
+
+    while (abstime.tv_nsec >= 1000000000)
+    {
+      abstime.tv_nsec -= 1000000000;
+      abstime.tv_sec ++;
+    };
 
     pthread_cond_timedwait(cond, mutex, &abstime);
   }
@@ -194,7 +203,7 @@ _cupsThreadWait(_cups_thread_t thread)	/* I - Thread ID */
 }
 
 
-#elif defined(WIN32)
+#elif defined(_WIN32)
 #  include <process.h>
 
 

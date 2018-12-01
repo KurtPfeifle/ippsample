@@ -21,7 +21,7 @@ static void		html_escape(server_client_t *client, const char *s,
 			            size_t slen);
 static void		html_footer(server_client_t *client);
 static void		html_header(server_client_t *client, const char *title);
-static void		html_printf(server_client_t *client, const char *format, ...) __attribute__((__format__(__printf__, 2, 3)));
+static void		html_printf(server_client_t *client, const char *format, ...) _CUPS_FORMAT(2, 3);
 static int		parse_options(server_client_t *client, cups_option_t **options);
 static int		show_materials(server_client_t *client, server_printer_t *printer, const char *encoding);
 static int		show_media(server_client_t *client, server_printer_t *printer, const char *encoding);
@@ -437,17 +437,17 @@ serverProcessHTTP(
     case HTTP_STATE_HEAD :
         if (!strncmp(client->uri, "/ipp/print/", 11))
         {
-          if ((uriptr = strchr(client->uri + 11, '/')) != NULL)
-            *uriptr++ = '\0';
-          else
-            uriptr = client->uri + strlen(client->uri);
+          if ((uriptr = strchr(client->uri + 11, '/')) == NULL)
+            uriptr = client->uri + 10;
+
+	  *uriptr++ = '\0';
         }
         else if (!strncmp(client->uri, "/ipp/print3d/", 13))
         {
-          if ((uriptr = strchr(client->uri + 13, '/')) != NULL)
-            *uriptr++ = '\0';
-          else
-            uriptr = client->uri + strlen(client->uri);
+          if ((uriptr = strchr(client->uri + 13, '/')) == NULL)
+            uriptr = client->uri + 12;
+
+	  *uriptr++ = '\0';
         }
         else if (!strcmp(client->uri, "/ipp/print"))
           uriptr = client->uri + strlen(client->uri);
@@ -488,17 +488,17 @@ serverProcessHTTP(
     case HTTP_STATE_GET :
         if (!strncmp(client->uri, "/ipp/print/", 11))
         {
-          if ((uriptr = strchr(client->uri + 11, '/')) != NULL)
-            *uriptr++ = '\0';
-          else
-            uriptr = client->uri + strlen(client->uri);
+          if ((uriptr = strchr(client->uri + 11, '/')) == NULL)
+            uriptr = client->uri + 10;
+
+	  *uriptr++ = '\0';
         }
         else if (!strncmp(client->uri, "/ipp/print3d/", 13))
         {
-          if ((uriptr = strchr(client->uri + 13, '/')) != NULL)
-            *uriptr++ = '\0';
-          else
-            uriptr = client->uri + strlen(client->uri);
+          if ((uriptr = strchr(client->uri + 13, '/')) == NULL)
+            uriptr = client->uri + 12;
+
+	  *uriptr++ = '\0';
         }
         else if (!strcmp(client->uri, "/ipp/print"))
           uriptr = client->uri + strlen(client->uri);
@@ -677,10 +677,10 @@ serverProcessHTTP(
 int					/* O - 1 on success, 0 on failure */
 serverRespondHTTP(
     server_client_t *client,		/* I - Client */
-    http_status_t code,			/* I - HTTP status of response */
-    const char    *content_encoding,	/* I - Content-Encoding of response */
-    const char    *type,		/* I - MIME media type of response */
-    size_t        length)		/* I - Length of response */
+    http_status_t   code,		/* I - HTTP status of response */
+    const char      *content_encoding,	/* I - Content-Encoding of response */
+    const char      *type,		/* I - MIME media type of response */
+    size_t          length)		/* I - Length of response */
 {
   char	message[1024];			/* Text message */
 
@@ -716,8 +716,19 @@ serverRespondHTTP(
 
   httpClearFields(client->http);
 
-  if (code == HTTP_STATUS_METHOD_NOT_ALLOWED ||
-      client->operation == HTTP_STATE_OPTIONS)
+  if (code == HTTP_STATUS_UNAUTHORIZED || code == HTTP_STATUS_FORBIDDEN)
+  {
+    char www_auth[HTTP_MAX_VALUE];	/* WWW-Authenicate header value */
+
+    if (!_cups_strcasecmp(AuthType, "Basic"))
+      snprintf(www_auth, sizeof(www_auth), "Basic realm=\"%s\" charset=\"UTF-8\"", AuthName);
+    else
+      www_auth[0] = '\0';
+
+    httpSetField(client->http, HTTP_FIELD_WWW_AUTHENTICATE, www_auth);
+  }
+
+  if (code == HTTP_STATUS_METHOD_NOT_ALLOWED || client->operation == HTTP_STATE_OPTIONS)
     httpSetField(client->http, HTTP_FIELD_ALLOW, "GET, HEAD, OPTIONS, POST");
 
   if (type)

@@ -1,5 +1,5 @@
 #
-# API library Makefile for CUPS.
+# API library Makefile for the CUPS library.
 #
 # Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group.
 # Copyright © 2007-2018 by Apple Inc.
@@ -23,7 +23,7 @@ OPTIONS	=	-D_CUPS_NO_DEPRECATED=1
 # Object files...
 #
 
-OBJS	=	\
+LIBOBJS	=	\
 		array.o \
 		auth.o \
 		debug.o \
@@ -33,7 +33,6 @@ OBJS	=	\
 		dest-options.o \
 		dir.o \
 		encode.o \
-		error.o \
 		file.o \
 		getputfile.o \
 		globals.o \
@@ -53,7 +52,9 @@ OBJS	=	\
 		notify.o \
 		options.o \
 		pwg-media.o \
-		raster.o \
+		raster-error.o \
+		raster-stream.o \
+		raster-stubs.o \
 		request.o \
 		snprintf.o \
 		string.o \
@@ -63,6 +64,19 @@ OBJS	=	\
 		transcode.o \
 		usersys.o \
 		util.o
+TESTOBJS =	\
+		testarray.o \
+		testclient.o \
+		testdest.o \
+		testfile.o \
+		testhttp.o \
+		testi18n.o \
+		testipp.o \
+		testoptions.o \
+		testraster.o
+OBJS	=	\
+		$(LIBOBJS) \
+		$(TESTOBJS)
 HEADERS =       \
                 array.h \
                 cups.h \
@@ -82,6 +96,7 @@ HEADERS =       \
 #
 
 TARGETS =	libcups.a
+TESTS	=	$(TESTOBJS:.o=)
 
 
 #
@@ -96,7 +111,7 @@ all:		$(TARGETS)
 #
 
 clean:
-	$(RM) $(OBJS) $(TARGETS)
+	$(RM) $(OBJS) $(TARGETS) $(TESTS)
 
 
 #
@@ -122,13 +137,26 @@ install:	all
 
 
 #
+# Test the library.
+#
+
+test:	$(TESTS)
+	echo Running unit tests...
+	for test in $(TESTS); do \
+		echo ""; \
+		echo Running $$test...; \
+		./$$test || exit 1; \
+	done
+
+
+#
 # libcups.a
 #
 
-libcups.a:	$(OBJS)
+libcups.a:	$(LIBOBJS)
 	echo Archiving $@...
 	$(RM) $@
-	$(AR) $(ARFLAGS) $@ $(OBJS)
+	$(AR) $(ARFLAGS) $@ $(LIBOBJS)
 	$(RANLIB) $@
 
 
@@ -139,82 +167,70 @@ libcups.a:	$(OBJS)
 libcups2.def: $(OBJS) Makefile
 	echo Generating $@...
 	echo "LIBRARY libcups2" >libcups2.def
-	echo "VERSION 2.12" >>libcups2.def
+	echo "VERSION 2.14" >>libcups2.def
 	echo "EXPORTS" >>libcups2.def
-	(nm $(OBJS) 2>/dev/null | grep "T _" | awk '{print $$3}'; \
-	 echo __cups_strcpy; echo __cups_strlcat; echo __cups_strlcpy) | \
+	(nm $(LIBOBJS) 2>/dev/null | grep "T _" | awk '{print $$3}'; \
+	 echo __cups_strcpy; echo __cups_strlcat; echo __cups_strlcpy; echo __cups_gettimeofday) | \
 		grep -v -E \
-		    -e 'cups_debug|Apple|BackChannel|Backend|FileCheck|Filter|GSSService|SetNegotiate|SideChannel' \
+		    -e 'cups_debug|Apple|FileCheck|GSSService|SetNegotiate' \
 		    -e 'Block$$' | \
 		sed -e '1,$$s/^_//' | sort >>libcups2.def
+
+
+#
+# Unit tests
+#
+
+testarray: testarray.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testarray.o $(LIBS)
+testclient: testclient.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testclient.o $(LIBS)
+testdest: testdest.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testdest.o $(LIBS)
+testfile: testfile.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testfile.o $(LIBS)
+testhttp: testhttp.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testhttp.o $(LIBS)
+testi18n: testi18n.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testi18n.o $(LIBS)
+testipp: testipp.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testipp.o $(LIBS)
+testoptions: testoptions.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testoptions.o $(LIBS)
+testraster: testraster.o
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ testraster.o $(LIBS)
 
 
 #
 # Automatic API help files...
 #
 
-APISOURCES =	\
-		auth.c \
-		cups.h \
-		dest.c \
-		dest-job.c \
-		dest-localization.c \
-		dest-options.c \
-		encode.c \
-		error.c \
-		getputfile.c \
-		hash.c \
-		http.c \
-		http.h \
-		http-addr.c \
-		http-addrlist.c \
-		http-support.c \
-		ipp.c \
-		ipp.h \
-		ipp-support.c \
-		md5passwd.c \
-		notify.c \
-		options.c \
-		pwg.h \
-		pwg-media.c \
-		raster.c \
-		raster.h \
-		request.c \
-		tls.c \
-		usersys.c \
-		util.c
+APISOURCES =	$(LIBOBJS:.o=.c) $(HEADERS)
 
 apihelp:
 	echo Generating CUPS API help files...
 	mxmldoc --title "CUPS API Programming Guide" \
 		--author "Michael R Sweet" \
-		--copyright "Copyright 2007-2017 by Apple Inc." \
+		--copyright "Copyright 2007-2018 by Apple Inc." \
 		--docversion $(IPPSAMPLE_VERSION) \
 		--intro api.intro \
 		api.xml $(APISOURCES) >../doc/api.html
 	mxmldoc --title "CUPS API Programming Guide" \
 		--author "Michael R Sweet" \
-		--copyright "Copyright 2007-2017 by Apple Inc." \
+		--copyright "Copyright 2007-2018 by Apple Inc." \
 		--docversion $(IPPSAMPLE_VERSION) \
 		--intro api.intro \
 		--epub ../doc/api.epub \
 		api.xml
-	if test `uname` = Darwin; then \
-		mxmldoc --title "CUPS API Programming Guide" \
-			--author "Michael R Sweet" \
-			--copyright "Copyright 2007-2017 by Apple Inc." \
-			--docversion $(IPPSAMPLE_VERSION) \
-			--intro api.intro \
-			--docset org.pwg.ippsample.docset \
-			--feedname org.pwg.ippsample \
-			--feedurl https://istopwg.github.io/ippsample/org.pwg.ippsample.atom \
-			api.xml; \
-		$(RM) org.pwg.ippsample.atom; \
-		xcrun docsetutil package --output org.pwg.ippsample.xar \
-			--atom org.pwg.ippsample.atom \
-			--download-url https://istopwg.github.io/ippsample/org.pwg.ippsample.xar \
-			org.pwg.ippsample.docset || exit 1; \
-	fi
 	$(RM) api.xml
 
 

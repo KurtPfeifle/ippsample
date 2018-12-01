@@ -1,5 +1,5 @@
 LIBRARY libcups2
-VERSION 2.12
+VERSION 2.14
 EXPORTS
 _cupsArrayAddStrings
 _cupsArrayNewStrings
@@ -13,6 +13,7 @@ _cupsConnect
 _cupsCreateDest
 _cupsEncodeOption
 _cupsEncodingName
+_cupsFilePeekAhead
 _cupsGet1284Values
 _cupsGetDestResource
 _cupsGetDests
@@ -21,6 +22,7 @@ _cupsGlobalLock
 _cupsGlobalUnlock
 _cupsGlobals
 _cupsLangPrintError
+_cupsLangPrintFilter
 _cupsLangPrintf
 _cupsLangPuts
 _cupsLangString
@@ -39,6 +41,15 @@ _cupsRWLockWrite
 _cupsRWUnlock
 _cupsRasterAddError
 _cupsRasterClearError
+_cupsRasterColorSpaceString
+_cupsRasterDelete
+_cupsRasterErrorString
+_cupsRasterInitPWGHeader
+_cupsRasterNew
+_cupsRasterReadHeader
+_cupsRasterReadPixels
+_cupsRasterWriteHeader
+_cupsRasterWritePixels
 _cupsSetDefaults
 _cupsSetError
 _cupsSetHTTPError
@@ -56,6 +67,7 @@ _cupsThreadCreate
 _cupsThreadDetach
 _cupsThreadWait
 _cupsUserDefault
+_cups_gettimeofday
 _cups_safe_vsnprintf
 _cups_strcasecmp
 _cups_strcpy
@@ -70,6 +82,7 @@ _httpDisconnect
 _httpEncodeURI
 _httpFreeCredentials
 _httpResolveURI
+_httpSetDigestAuthString
 _httpStatus
 _httpTLSInitialize
 _httpTLSPending
@@ -138,6 +151,7 @@ cupsDoAuthentication
 cupsDoFileRequest
 cupsDoIORequest
 cupsDoRequest
+cupsEncodeOption
 cupsEncodeOptions
 cupsEncodeOptions2
 cupsEncryption

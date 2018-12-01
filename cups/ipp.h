@@ -1,10 +1,11 @@
 /*
  * Internet Printing Protocol definitions for CUPS.
  *
- * Copyright 2007-2017 by Apple Inc.
- * Copyright 1997-2006 by Easy Software Products.
+ * Copyright © 2007-2018 by Apple Inc.
+ * Copyright © 1997-2006 by Easy Software Products.
  *
- * Licensed under Apache License v2.0.  See the file "LICENSE" for more information.
+ * Licensed under Apache License v2.0.  See the file "LICENSE" for more
+ * information.
  */
 
 #ifndef _CUPS_IPP_H_
@@ -73,11 +74,11 @@ extern "C" {
 
 typedef enum ipp_dstate_e		/**** Document states @exclude all@ ****/
 {
-  IPP_DOCUMENT_PENDING = 3,		/* Document is pending */
-  IPP_DOCUMENT_PROCESSING = 5,		/* Document is processing */
-  IPP_DOCUMENT_CANCELED = 7,		/* Document is canceled */
-  IPP_DOCUMENT_ABORTED,			/* Document is aborted */
-  IPP_DOCUMENT_COMPLETED		/* Document is completed */
+  IPP_DSTATE_PENDING = 3,		/* Document is pending */
+  IPP_DSTATE_PROCESSING = 5,		/* Document is processing */
+  IPP_DSTATE_CANCELED = 7,		/* Document is canceled */
+  IPP_DSTATE_ABORTED,			/* Document is aborted */
+  IPP_DSTATE_COMPLETED			/* Document is completed */
 
 #  ifndef _CUPS_NO_DEPRECATED
 #    define IPP_DOCUMENT_PENDING	IPP_DSTATE_PENDING
@@ -489,6 +490,22 @@ typedef enum ipp_res_e			/**** Resolution units ****/
   IPP_RES_PER_CM			/* Pixels per centimeter */
 } ipp_res_t;
 
+typedef enum ipp_rstate_e		/**** resource-state values ****/
+{
+  IPP_RSTATE_PENDING = 3,		/* Resource is created but has no data yet. */
+  IPP_RSTATE_AVAILABLE,			/* Resource is available for installation. */
+  IPP_RSTATE_INSTALLED,			/* Resource is installed.  */
+  IPP_RSTATE_CANCELED,			/* Resource has been canceled and is pending deletion. */
+  IPP_RSTATE_ABORTED			/* Resource has been aborted and is pending deletion. */
+} ipp_rstate_t;
+
+typedef enum ipp_sstate_e		/**** system-state values ****/
+{
+  IPP_SSTATE_IDLE = 3,			/* At least one printer is idle and none are processing a job. */
+  IPP_SSTATE_PROCESSING,		/* At least one printer is processing a job. */
+  IPP_SSTATE_STOPPED			/* All printers are stopped. */
+} ipp_sstate_t;
+
 typedef enum ipp_state_e		/**** ipp_t state values ****/
 {
   IPP_STATE_ERROR = -1,			/* An error occurred */
@@ -725,191 +742,56 @@ typedef int (*ipp_copycb_t)(void *context, ipp_t *dst, ipp_attribute_t *attr);
 
 
 /*
- * The following structures are PRIVATE starting with CUPS 1.6/macOS 10.8.
- * Please use the new accessor functions available in CUPS 1.6 and later, as
- * these definitions will be moved to a private header file in a future release.
- *
- * Define _IPP_PRIVATE_STRUCTURES to 1 to cause the private IPP structures to be
- * exposed in CUPS 1.6.  This happens automatically on macOS when compiling for
- * a deployment target of 10.7 or earlier.
- *
- * Define _IPP_PRIVATE_STRUCTURES to 0 to prevent the private IPP structures
- * from being exposed.  This is useful when migrating existing code to the new
- * accessors.
- */
-
-#  ifdef _IPP_PRIVATE_STRUCTURES
-     /* Somebody has overridden the value */
-#  elif defined(_CUPS_SOURCE) || defined(_CUPS_IPP_PRIVATE_H_)
-     /* Building CUPS */
-#    define _IPP_PRIVATE_STRUCTURES 1
-#  elif defined(__APPLE__)
-#    if defined(MAC_OS_X_VERSION_10_8) && MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_8
-       /* Building for 10.7 and earlier */
-#      define _IPP_PRIVATE_STRUCTURES 1
-#    elif !defined(MAC_OS_X_VERSION_10_8)
-       /* Building for 10.7 and earlier */
-#      define _IPP_PRIVATE_STRUCTURES 1
-#    endif /* MAC_OS_X_VERSION_10_8 && MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_8 */
-#  else
-#    define _IPP_PRIVATE_STRUCTURES 0
-#  endif /* _CUPS_SOURCE || _CUPS_IPP_PRIVATE_H_ */
-
-#  if _IPP_PRIVATE_STRUCTURES
-typedef union _ipp_request_u		/**** Request Header ****/
-{
-  struct				/* Any Header */
-  {
-    ipp_uchar_t	version[2];		/* Protocol version number */
-    int		op_status;		/* Operation ID or status code*/
-    int		request_id;		/* Request ID */
-  }		any;
-
-  struct				/* Operation Header */
-  {
-    ipp_uchar_t	version[2];		/* Protocol version number */
-    ipp_op_t	operation_id;		/* Operation ID */
-    int		request_id;		/* Request ID */
-  }		op;
-
-  struct				/* Status Header */
-  {
-    ipp_uchar_t	version[2];		/* Protocol version number */
-    ipp_status_t status_code;		/* Status code */
-    int		request_id;		/* Request ID */
-  }		status;
-
-  /**** New in CUPS 1.1.19 ****/
-  struct				/* Event Header @since CUPS 1.1.19/macOS 10.3@ */
-  {
-    ipp_uchar_t	version[2];		/* Protocol version number */
-    ipp_status_t status_code;		/* Status code */
-    int		request_id;		/* Request ID */
-  }		event;
-} _ipp_request_t;
-
-/**** New in CUPS 1.1.19 ****/
-
-typedef union _ipp_value_u		/**** Attribute Value ****/
-{
-  int		integer;		/* Integer/enumerated value */
-
-  char		boolean;		/* Boolean value */
-
-  ipp_uchar_t	date[11];		/* Date/time value */
-
-  struct
-  {
-    int		xres,			/* Horizontal resolution */
-		yres;			/* Vertical resolution */
-    ipp_res_t	units;			/* Resolution units */
-  }		resolution;		/* Resolution value */
-
-  struct
-  {
-    int		lower,			/* Lower value */
-		upper;			/* Upper value */
-  }		range;			/* Range of integers value */
-
-  struct
-  {
-    char	*language;		/* Language code */
-    char	*text;			/* String */
-  }		string;			/* String with language value */
-
-  struct
-  {
-    int		length;			/* Length of attribute */
-    void	*data;			/* Data in attribute */
-  }		unknown;		/* Unknown attribute type */
-
-/**** New in CUPS 1.1.19 ****/
-  ipp_t		*collection;		/* Collection value @since CUPS 1.1.19/macOS 10.3@ */
-} _ipp_value_t;
-typedef _ipp_value_t ipp_value_t;	/**** Convenience typedef that will be removed @private@ ****/
-
-struct _ipp_attribute_s			/**** IPP attribute ****/
-{
-  ipp_attribute_t *next;		/* Next attribute in list */
-  ipp_tag_t	group_tag,		/* Job/Printer/Operation group tag */
-		value_tag;		/* What type of value is it? */
-  char		*name;			/* Name of attribute */
-  int		num_values;		/* Number of values */
-  _ipp_value_t	values[1];		/* Values */
-};
-
-struct _ipp_s				/**** IPP Request/Response/Notification ****/
-{
-  ipp_state_t		state;		/* State of request */
-  _ipp_request_t	request;	/* Request header */
-  ipp_attribute_t	*attrs;		/* Attributes */
-  ipp_attribute_t	*last;		/* Last attribute in list */
-  ipp_attribute_t	*current;	/* Current attribute (for read/write) */
-  ipp_tag_t		curtag;		/* Current attribute group tag */
-
-/**** New in CUPS 1.2 ****/
-  ipp_attribute_t	*prev;		/* Previous attribute (for read) @since CUPS 1.2/macOS 10.5@ */
-
-/**** New in CUPS 1.4.4 ****/
-  int			use;		/* Use count @since CUPS 1.4.4/macOS 10.6.?@ */
-/**** New in CUPS 2.0 ****/
-  int			atend,		/* At end of list? */
-			curindex;	/* Current attribute index for hierarchical search */
-};
-#  endif /* _IPP_PRIVATE_STRUCTURES */
-
-
-/*
  * Prototypes...
  */
 
 extern ipp_attribute_t	*ippAddBoolean(ipp_t *ipp, ipp_tag_t group,
-			               const char *name, char value);
+			               const char *name, char value) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddBooleans(ipp_t *ipp, ipp_tag_t group,
 			                const char *name, int num_values,
-					const char *values);
+					const char *values) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddDate(ipp_t *ipp, ipp_tag_t group,
-			            const char *name, const ipp_uchar_t *value);
+			            const char *name, const ipp_uchar_t *value) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddInteger(ipp_t *ipp, ipp_tag_t group,
 			               ipp_tag_t value_tag, const char *name,
-				       int value);
+				       int value) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddIntegers(ipp_t *ipp, ipp_tag_t group,
 			                ipp_tag_t value_tag, const char *name,
-					int num_values, const int *values);
+					int num_values, const int *values) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddRange(ipp_t *ipp, ipp_tag_t group,
-			             const char *name, int lower, int upper);
+			             const char *name, int lower, int upper) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddRanges(ipp_t *ipp, ipp_tag_t group,
 			              const char *name, int num_values,
-				      const int *lower, const int *upper);
+				      const int *lower, const int *upper) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddResolution(ipp_t *ipp, ipp_tag_t group,
 			                  const char *name, ipp_res_t units,
-					  int xres, int yres);
+					  int xres, int yres) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddResolutions(ipp_t *ipp, ipp_tag_t group,
 			                   const char *name, int num_values,
 					   ipp_res_t units, const int *xres,
-					   const int *yres);
-extern ipp_attribute_t	*ippAddSeparator(ipp_t *ipp);
+					   const int *yres) _CUPS_PUBLIC;
+extern ipp_attribute_t	*ippAddSeparator(ipp_t *ipp) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddString(ipp_t *ipp, ipp_tag_t group,
 			              ipp_tag_t value_tag, const char *name,
-				      const char *language, const char *value);
+				      const char *language, const char *value) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippAddStrings(ipp_t *ipp, ipp_tag_t group,
 			               ipp_tag_t value_tag, const char *name,
 				       int num_values, const char *language,
-				       const char * const *values);
-extern time_t		ippDateToTime(const ipp_uchar_t *date);
-extern void		ippDelete(ipp_t *ipp);
-extern const char	*ippErrorString(ipp_status_t error);
+				       const char * const *values) _CUPS_PUBLIC;
+extern time_t		ippDateToTime(const ipp_uchar_t *date) _CUPS_PUBLIC;
+extern void		ippDelete(ipp_t *ipp) _CUPS_PUBLIC;
+extern const char	*ippErrorString(ipp_status_t error) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippFindAttribute(ipp_t *ipp, const char *name,
-			                  ipp_tag_t value_tag);
+			                  ipp_tag_t value_tag) _CUPS_PUBLIC;
 extern ipp_attribute_t	*ippFindNextAttribute(ipp_t *ipp, const char *name,
-			                      ipp_tag_t value_tag);
-extern size_t		ippLength(ipp_t *ipp);
-extern ipp_t		*ippNew(void);
-extern ipp_state_t	ippRead(http_t *http, ipp_t *ipp);
-extern const ipp_uchar_t *ippTimeToDate(time_t t);
-extern ipp_state_t	ippWrite(http_t *http, ipp_t *ipp);
-extern int		ippPort(void);
-extern void		ippSetPort(int p);
+			                      ipp_tag_t value_tag) _CUPS_PUBLIC;
+extern size_t		ippLength(ipp_t *ipp) _CUPS_PUBLIC;
+extern ipp_t		*ippNew(void) _CUPS_PUBLIC;
+extern ipp_state_t	ippRead(http_t *http, ipp_t *ipp) _CUPS_PUBLIC;
+extern const ipp_uchar_t *ippTimeToDate(time_t t) _CUPS_PUBLIC;
+extern ipp_state_t	ippWrite(http_t *http, ipp_t *ipp) _CUPS_PUBLIC;
+extern int		ippPort(void) _CUPS_PUBLIC;
+extern void		ippSetPort(int p) _CUPS_PUBLIC;
 
 /**** New in CUPS 1.1.19 ****/
 extern ipp_attribute_t	*ippAddCollection(ipp_t *ipp, ipp_tag_t group,

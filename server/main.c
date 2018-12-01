@@ -16,7 +16,7 @@
  * Local functions...
  */
 
-static void		usage(int status) __attribute__((noreturn));
+static void		usage(int status) _CUPS_NORETURN;
 
 
 /*
@@ -40,10 +40,29 @@ main(int  argc,				/* I - Number of command-line args */
   */
 
   memset(&pinfo, 0, sizeof(pinfo));
+  pinfo.print_group = SERVER_GROUP_NONE;
+  pinfo.proxy_group = SERVER_GROUP_NONE;
 
   for (i = 1; i < argc; i ++)
   {
-    if (argv[i][0] == '-')
+    if (!strcmp(argv[i], "--help"))
+    {
+      usage(0);
+    }
+    else if (!strcmp(argv[i], "--relaxed"))
+    {
+      RelaxedConformance = 1;
+    }
+    else if (!strcmp(argv[i], "--version"))
+    {
+      puts(CUPS_SVERSION);
+    }
+    else if (!strncmp(argv[i], "--", 2))
+    {
+      fprintf(stderr, "ippserver: Unknown option \"%s\".\n", argv[i]);
+      usage(1);
+    }
+    else if (argv[i][0] == '-')
     {
       for (opt = argv[i] + 1; *opt; opt ++)
       {
@@ -76,10 +95,8 @@ main(int  argc,				/* I - Number of command-line args */
 	      if (i >= argc)
 	        usage(1);
 
-              if (pinfo.make)
-                free(pinfo.make);
 
-	      pinfo.make = strdup(argv[i]);
+	      pinfo.make = argv[i];
 	      break;
 
           case 'P' : /* -P (PIN printing mode) */
@@ -100,9 +117,6 @@ main(int  argc,				/* I - Number of command-line args */
 	      if (i >= argc)
 	        usage(1);
 
-              if (pinfo.command)
-                free(pinfo.command);
-
 	      pinfo.command = argv[i];
 	      break;
 
@@ -119,10 +133,7 @@ main(int  argc,				/* I - Number of command-line args */
 	      if (i >= argc)
 	        usage(1);
 
-              if (pinfo.document_formats)
-                free(pinfo.document_formats);
-
-	      pinfo.document_formats = strdup(argv[i]);
+	      pinfo.document_formats = argv[i];
 	      break;
 
           case 'h' : /* -h (show help) */
@@ -133,10 +144,7 @@ main(int  argc,				/* I - Number of command-line args */
 	      if (i >= argc)
 	        usage(1);
 
-              if (pinfo.icon)
-                free(pinfo.icon);
-
-	      pinfo.icon = strdup(argv[i]);
+	      pinfo.icon = argv[i];
 	      break;
 
 	  case 'k' : /* -k (keep files) */
@@ -148,10 +156,7 @@ main(int  argc,				/* I - Number of command-line args */
 	      if (i >= argc)
 	        usage(1);
 
-              if (pinfo.location)
-                free(pinfo.location);
-
-	      pinfo.location = strdup(argv[i]);
+	      pinfo.location = argv[i];
 	      break;
 
 	  case 'm' : /* -m model */
@@ -159,10 +164,7 @@ main(int  argc,				/* I - Number of command-line args */
 	      if (i >= argc)
 	        usage(1);
 
-              if (pinfo.model)
-                free(pinfo.model);
-
-	      pinfo.model = strdup(argv[i]);
+	      pinfo.model = argv[i];
 	      break;
 
 	  case 'n' : /* -n hostname */
@@ -197,17 +199,6 @@ main(int  argc,				/* I - Number of command-line args */
                 usage(1);
               break;
 
-          case 'u' : /* -u user:pass */
-	      i ++;
-	      if (i >= argc)
-	        usage(1);
-
-              if (pinfo.proxy_user)
-                free(pinfo.proxy_user);
-
-	      pinfo.proxy_user = strdup(argv[i]);
-	      break;
-
 	  case 'v' : /* -v (be verbose) */
 	      LogLevel ++;
 	      break;
@@ -238,22 +229,6 @@ main(int  argc,				/* I - Number of command-line args */
     usage(1);
   }
 
-  if (!confdir)
-  {
-   /*
-    * Apply defaults for some of the other options...
-    */
-
-    if (!pinfo.location)
-      pinfo.location = strdup("");
-    if (!pinfo.make)
-      pinfo.make = strdup("Test");
-    if (!pinfo.model)
-      pinfo.model = strdup("Printer");
-    if (!pinfo.document_formats)
-      pinfo.document_formats = strdup("application/pdf,image/jpeg,image/pwg-raster");
-  }
-
   if (!name && !confdir)
     usage(1);
   else if (confdir)
@@ -262,7 +237,7 @@ main(int  argc,				/* I - Number of command-line args */
     * Load the configuration from the specified directory...
     */
 
-    if (!serverLoadConfiguration(confdir))
+    if (!serverCreateSystem(confdir))
       return (1);
   }
   else
@@ -273,14 +248,25 @@ main(int  argc,				/* I - Number of command-line args */
 
     serverLog(SERVER_LOGLEVEL_INFO, "Using default configuration with a single printer.");
 
-    if (!serverFinalizeConfiguration())
+    if (!pinfo.document_formats)
+      pinfo.document_formats = "application/pdf,image/jpeg,image/pwg-raster";
+    if (!pinfo.location)
+      pinfo.location = "";
+    if (!pinfo.make)
+      pinfo.make = "Test";
+    if (!pinfo.model)
+      pinfo.model = "Printer";
+
+    if (!serverCreateSystem(NULL))
       return (1);
 
-    if ((printer = serverCreatePrinter("/ipp/print", name, &pinfo)) == NULL)
+    if ((printer = serverCreatePrinter("/ipp/print", name, &pinfo, 1)) == NULL)
       return (1);
 
-    Printers = cupsArrayNew(NULL, NULL);
-    cupsArrayAdd(Printers, printer);
+    printer->state        = IPP_PSTATE_IDLE;
+    printer->is_accepting = 1;
+
+    serverAddPrinter(printer);
   }
 
  /*
@@ -302,13 +288,18 @@ usage(int status)			/* O - Exit status */
 {
   if (!status)
   {
-    puts(CUPS_SVERSION " - Copyright 2010-2017 by Apple Inc. All rights reserved.");
+    puts(CUPS_SVERSION);
+    puts("Copyright (c) 2014-2018 by the IEEE-ISTO Printer Working Group.");
+    puts("Copyright (c) 2010-2018 by Apple Inc.");
     puts("");
   }
 
   puts("Usage: ippserver [options] \"name\"");
   puts("");
   puts("Options:");
+  puts("--help                  Show program help.");
+  puts("--relaxed               Run in relaxed conformance mode.");
+  puts("--version               Show program version.");
   puts("-2                      Supports 2-sided printing (default=1-sided)");
   puts("-C config-directory     Load settings and printers from the specified directory.");
 #ifdef HAVE_SSL
@@ -331,7 +322,6 @@ usage(int status)			/* O - Exit status */
   puts("-p port                 Port number (default=auto)");
   puts("-r subtype              Bonjour service subtype (default=_print)");
   puts("-s speed[,color-speed]  Speed in pages per minute (default=10,0)");
-  puts("-u username:password    Specifies a username and password to require.");
   puts("-v[v]                   Be (very) verbose");
 
   exit(status);

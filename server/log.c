@@ -83,7 +83,8 @@ serverLogAttributes(
     if (ippGetGroupTag(attr) != group_tag)
     {
       group_tag = ippGetGroupTag(attr);
-      serverLogClient(SERVER_LOGLEVEL_DEBUG, client, "%s %s", title, ippTagString(group_tag));
+      if (group_tag != IPP_TAG_ZERO)
+        serverLogClient(SERVER_LOGLEVEL_DEBUG, client, "%s %s", title, ippTagString(group_tag));
     }
 
     if (ippGetName(attr))
@@ -220,8 +221,14 @@ server_log_to_file(
   };
 
 
+#ifdef _WIN32
+  _cups_gettimeofday(&curtime, NULL);
+  time_t tv_sec = (time_t)curtime.tv_sec;
+  curdate = gmtime(&tv_sec);
+#else
   gettimeofday(&curtime, NULL);
   curdate = gmtime(&curtime.tv_sec);
+#endif /* _WIN32 */
 
   if (LogFile)
   {
@@ -229,7 +236,7 @@ server_log_to_file(
     * When logging to a file, use the syslog format...
     */
 
-    snprintf(buffer, sizeof(buffer), "%s1 %04d-%02d-%02dT%02d:%02d:%02d.%03dZ %s ippserver %d -  ", pris[level], curdate->tm_year + 1900, curdate->tm_mon + 1, curdate->tm_mday, curdate->tm_hour, curdate->tm_min, curdate->tm_sec, curtime.tv_usec / 1000, ServerName, getpid());
+    snprintf(buffer, sizeof(buffer), "%s1 %04d-%02d-%02dT%02d:%02d:%02d.%03dZ %s ippserver %d -  ", pris[level], curdate->tm_year + 1900, curdate->tm_mon + 1, curdate->tm_mday, curdate->tm_hour, curdate->tm_min, curdate->tm_sec, (int)curtime.tv_usec / 1000, ServerName, getpid());
   }
   else
   {
@@ -237,7 +244,7 @@ server_log_to_file(
     * Otherwise just include the date and time for convenience...
     */
 
-    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ  ", curdate->tm_year + 1900, curdate->tm_mon + 1, curdate->tm_mday, curdate->tm_hour, curdate->tm_min, curdate->tm_sec, curtime.tv_usec / 1000);
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ  ", curdate->tm_year + 1900, curdate->tm_mon + 1, curdate->tm_mday, curdate->tm_hour, curdate->tm_min, curdate->tm_sec, (int)curtime.tv_usec / 1000);
   }
 
   bufptr = buffer + strlen(buffer);

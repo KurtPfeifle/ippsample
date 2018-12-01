@@ -13,6 +13,7 @@
  */
 
 #include "cups-private.h"
+#include "debug-internal.h"
 #include <sys/stat.h>
 
 #ifdef HAVE_NOTIFY_H
@@ -564,7 +565,7 @@ _cupsAppleSetUseLastPrinter(
 
 
 /*
- * 'cupsConnectDest()' - Open a conection to the destination.
+ * 'cupsConnectDest()' - Open a connection to the destination.
  *
  * Connect to the destination, returning a new @code http_t@ connection object
  * and optionally the resource path to use for the destination.  These calls
@@ -573,7 +574,7 @@ _cupsAppleSetUseLastPrinter(
  * returns 0.  The caller is responsible for calling @link httpClose@ on the
  * returned connection.
  *
- * Starting with CUPS 2.2.4, the caller can pass  @code CUPS_DEST_FLAGS_DEVICE@
+ * Starting with CUPS 2.2.4, the caller can pass @code CUPS_DEST_FLAGS_DEVICE@
  * for the "flags" argument to connect directly to the device associated with
  * the destination.  Otherwise, the connection is made to the CUPS scheduler
  * associated with the destination.
@@ -1279,6 +1280,12 @@ cupsGetDestWithURI(const char *name,	/* I - Desired printer name or @code NULL@ 
     {
       snprintf(temp, sizeof(temp), "%s @ %s", resource + 10, hostname);
       name = resource + 10;
+      info = temp;
+    }
+    else if (!strncmp(resource, "/ipp/print/", 11))
+    {
+      snprintf(temp, sizeof(temp), "%s @ %s", resource + 11, hostname);
+      name = resource + 11;
       info = temp;
     }
     else
@@ -2025,9 +2032,9 @@ cupsSetDests2(http_t      *http,	/* I - Connection to server or @code CUPS_HTTP_
   cups_option_t	*option;		/* Current option */
   _ipp_option_t	*match;			/* Matching attribute for option */
   FILE		*fp;			/* File pointer */
-#ifndef WIN32
+#ifndef _WIN32
   const char	*home;			/* HOME environment variable */
-#endif /* WIN32 */
+#endif /* _WIN32 */
   char		filename[1024];		/* lpoptions file */
   int		num_temps;		/* Number of temporary destinations */
   cups_dest_t	*temps = NULL,		/* Temporary destinations */
@@ -2061,7 +2068,7 @@ cupsSetDests2(http_t      *http,	/* I - Connection to server or @code CUPS_HTTP_
 
   snprintf(filename, sizeof(filename), "%s/lpoptions", cg->cups_serverroot);
 
-#ifndef WIN32
+#ifndef _WIN32
   if (getuid())
   {
    /*
@@ -2081,7 +2088,7 @@ cupsSetDests2(http_t      *http,	/* I - Connection to server or @code CUPS_HTTP_
       snprintf(filename, sizeof(filename), "%s/.cups/lpoptions", home);
     }
   }
-#endif /* !WIN32 */
+#endif /* !_WIN32 */
 
  /*
   * Try to open the file...
@@ -2093,7 +2100,7 @@ cupsSetDests2(http_t      *http,	/* I - Connection to server or @code CUPS_HTTP_
     return (-1);
   }
 
-#ifndef WIN32
+#ifndef _WIN32
  /*
   * Set the permissions to 0644 when saving to the /etc/cups/lpoptions
   * file...
@@ -2101,7 +2108,7 @@ cupsSetDests2(http_t      *http,	/* I - Connection to server or @code CUPS_HTTP_
 
   if (!getuid())
     fchmod(fileno(fp), 0644);
-#endif /* !WIN32 */
+#endif /* !_WIN32 */
 
  /*
   * Write each printer; each line looks like:

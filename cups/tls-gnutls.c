@@ -1,10 +1,11 @@
 /*
  * TLS support code for CUPS using GNU TLS.
  *
- * Copyright 2007-2018 by Apple Inc.
- * Copyright 1997-2007 by Easy Software Products, all rights reserved.
+ * Copyright © 2007-2018 by Apple Inc.
+ * Copyright © 1997-2007 by Easy Software Products, all rights reserved.
  *
- * Licensed under Apache License v2.0.  See the file "LICENSE" for more information.
+ * Licensed under Apache License v2.0.  See the file "LICENSE" for more
+ * information.
  */
 
 /**** This file is included from tls.c ****/
@@ -639,22 +640,31 @@ httpCredentialsString(
   if ((first = (http_credential_t *)cupsArrayFirst(credentials)) != NULL &&
       (cert = http_gnutls_create_credential(first)) != NULL)
   {
-    char		name[256];	/* Common name associated with cert */
-    size_t		namelen;	/* Length of name */
+    char		name[256],	/* Common name associated with cert */
+			issuer[256];	/* Issuer associated with cert */
+    size_t		len;		/* Length of string */
     time_t		expiration;	/* Expiration date of cert */
+    int 		sigalg;         /* Signature algorithm */
     unsigned char	md5_digest[16];	/* MD5 result */
 
-    namelen = sizeof(name) - 1;
-    if (gnutls_x509_crt_get_dn_by_oid(cert, GNUTLS_OID_X520_COMMON_NAME, 0, 0, name, &namelen) >= 0)
-      name[namelen] = '\0';
+    len = sizeof(name) - 1;
+    if (gnutls_x509_crt_get_dn_by_oid(cert, GNUTLS_OID_X520_COMMON_NAME, 0, 0, name, &len) >= 0)
+      name[len] = '\0';
     else
       strlcpy(name, "unknown", sizeof(name));
 
+    len = sizeof(issuer) - 1;
+    if (gnutls_x509_crt_get_issuer_dn_by_oid(cert, GNUTLS_OID_X520_ORGANIZATION_NAME, 0, 0, issuer, &len) >= 0)
+      issuer[len] = '\0';
+    else
+      strlcpy(issuer, "unknown", sizeof(issuer));
+
     expiration = gnutls_x509_crt_get_expiration_time(cert);
+    sigalg     = gnutls_x509_crt_get_signature_algorithm(cert);
 
     cupsHashData("md5", first->data, first->datalen, md5_digest, sizeof(md5_digest));
 
-    snprintf(buffer, bufsize, "%s / %s / %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X", name, httpGetDateString(expiration), md5_digest[0], md5_digest[1], md5_digest[2], md5_digest[3], md5_digest[4], md5_digest[5], md5_digest[6], md5_digest[7], md5_digest[8], md5_digest[9], md5_digest[10], md5_digest[11], md5_digest[12], md5_digest[13], md5_digest[14], md5_digest[15]);
+    snprintf(buffer, bufsize, "%s (issued by %s) / %s / %s / %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X", name, issuer, httpGetDateString(expiration), gnutls_sign_get_name(sigalg), md5_digest[0], md5_digest[1], md5_digest[2], md5_digest[3], md5_digest[4], md5_digest[5], md5_digest[6], md5_digest[7], md5_digest[8], md5_digest[9], md5_digest[10], md5_digest[11], md5_digest[12], md5_digest[13], md5_digest[14], md5_digest[15]);
 
     gnutls_x509_crt_deinit(cert);
   }
@@ -1087,7 +1097,7 @@ http_gnutls_read(
 
   http = (http_t *)ptr;
 
-  if (!http->blocking)
+  if (!http->blocking || http->timeout_value > 0.0)
   {
    /*
     * Make sure we have data before we read...
@@ -1200,19 +1210,6 @@ _httpTLSRead(http_t *http,		/* I - Connection to server */
 
 
 /*
- * '_httpTLSSetCredentials()' - Set the TLS credentials.
- */
-
-int					/* O - Status of connection */
-_httpTLSSetCredentials(http_t *http)	/* I - Connection to server */
-{
-  (void)http;
-
-  return (0);
-}
-
-
-/*
  * '_httpTLSSetOptions()' - Set TLS protocol and cipher suite options.
  */
 
@@ -1245,6 +1242,9 @@ _httpTLSStart(http_t *http)		/* I - Connection to server */
   char			priority_string[2048];
 					/* Priority string */
   int			version;	/* Current version */
+  double		old_timeout;	/* Old timeout value */
+  http_timeout_cb_t	old_cb;		/* Old timeout callback */
+  void			*old_data;	/* Old timeout data */
   static const char * const versions[] =/* SSL/TLS versions */
   {
     "VERS-SSL3.0",
@@ -1578,6 +1578,24 @@ _httpTLSStart(http_t *http)		/* I - Connection to server */
 #endif /* HAVE_GNUTLS_TRANSPORT_SET_PULL_TIMEOUT_FUNCTION */
   gnutls_transport_set_push_function(http->tls, http_gnutls_write);
 
+ /*
+  * Enforce a minimum timeout of 10 seconds for the TLS handshake...
+  */
+
+  old_timeout  = http->timeout_value;
+  old_cb       = http->timeout_cb;
+  old_data     = http->timeout_data;
+
+  if (!old_cb || old_timeout < 10.0)
+  {
+    DEBUG_puts("4_httpTLSStart: Setting timeout to 10 seconds.");
+    httpSetTimeout(http, 10.0, NULL, NULL);
+  }
+
+ /*
+  * Do the TLS handshake...
+  */
+
   while ((status = gnutls_handshake(http->tls)) != GNUTLS_E_SUCCESS)
   {
     DEBUG_printf(("5_httpStartTLS: gnutls_handshake returned %d (%s)",
@@ -1595,9 +1613,17 @@ _httpTLSStart(http_t *http)		/* I - Connection to server */
       free(credentials);
       http->tls = NULL;
 
+      httpSetTimeout(http, old_timeout, old_cb, old_data);
+
       return (-1);
     }
   }
+
+ /*
+  * Restore the previous timeout settings...
+  */
+
+  httpSetTimeout(http, old_timeout, old_cb, old_data);
 
   http->tls_credentials = credentials;
 

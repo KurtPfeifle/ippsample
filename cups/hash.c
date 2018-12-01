@@ -1,9 +1,10 @@
 /*
  * Hashing function for CUPS.
  *
- * Copyright 2015-2017 by Apple Inc.
+ * Copyright © 2015-2018 by Apple Inc.
  *
- * Licensed under Apache License v2.0.  See the file "LICENSE" for more information.
+ * Licensed under Apache License v2.0.  See the file "LICENSE" for more
+ * information.
  */
 
 /*
@@ -16,7 +17,7 @@
 #elif defined(HAVE_GNUTLS)
 #  include <gnutls/crypto.h>
 #else
-#  include "md5-private.h"
+#  include "md5-internal.h"
 #endif /* __APPLE__ */
 
 
@@ -274,6 +275,8 @@ cupsHashData(const char    *algorithm,	/* I - Algorithm name */
  * 'cupsHashString()' - Format a hash value as a hexadecimal string.
  *
  * The passed buffer must be at least 2 * hashsize + 1 characters in length.
+ *
+ * @since CUPS 2.2.7@
  */
 
 const char *				/* O - Formatted string */

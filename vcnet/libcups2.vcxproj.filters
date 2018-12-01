@@ -24,6 +24,18 @@
     <ClCompile Include="..\cups\debug.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\cups\dest-job.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cups\dest-localization.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cups\dest-options.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cups\dest.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\cups\dir.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -69,6 +81,9 @@
     <ClCompile Include="..\cups\md5passwd.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\cups\notify.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\cups\options.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -99,31 +114,25 @@
     <ClCompile Include="..\cups\usersys.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\cups\dest.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cups\dest-job.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cups\dest-localization.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cups\dest-options.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cups\error.c">
+    <ClCompile Include="..\cups\util.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\cups\hash.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\cups\raster.c">
+    <ClCompile Include="..\cups\raster-error.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\cups\util.c">
+    <ClCompile Include="..\cups\raster-stream.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\cups\notify.c">
+    <ClCompile Include="..\cups\raster-stubs.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cups\ipp-file.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\cups\ipp-vars.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -131,6 +140,7 @@
     <None Include="..\cups\libcups2.def">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\cups\array.h">
@@ -155,6 +165,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\cups\file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cups\globals.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\cups\http-private.h">
@@ -182,6 +195,27 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\cups\transcode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cups\raster.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cups\raster-private.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cups\array-private.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cups\versioning.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cups\language-private.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cups\md5-private.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\cups\pwg.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

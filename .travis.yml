@@ -8,12 +8,12 @@ before_install:
     - sudo apt-get update
 
 install:
-    - sudo apt-get -y install appstream coreutils autoconf build-essential avahi-daemon avahi-utils libavahi-client-dev libgnutls28-dev libjpeg-dev libnss-mdns libpng-dev zlib1g-dev
+    - sudo apt-get -y install appstream coreutils autoconf build-essential avahi-daemon avahi-utils libavahi-client-dev libgnutls28-dev libjpeg-dev libnss-mdns libpng-dev zlib1g-dev mupdf
 
 script:
   - ./configure --prefix=/usr
   - make -j$(nproc)
-  - cd doc ; make ; cd -       # HTML files are not built+installed by default
+  - cd man ; make ; cd -       # HTML files are not built+installed by default
   - make BUILDROOT=$(readlink -f appdir) install
   - mkdir -p ./appdir/usr/share/doc/html/ipptool ; cp doc/*.html ./appdir/usr/share/doc/html/ipptool/
   - find . -type f -name "*.txt" -exec cp {} ./appdir/ \;

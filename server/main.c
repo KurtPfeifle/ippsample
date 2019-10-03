@@ -1,8 +1,8 @@
 /*
  * Main entry for IPP Infrastructure Printer sample implementation.
  *
- * Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group
- * Copyright © 2010-2018 by Apple Inc.
+ * Copyright © 2014-2019 by the IEEE-ISTO Printer Working Group
+ * Copyright © 2010-2019 by Apple Inc.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
  * information.
@@ -42,6 +42,7 @@ main(int  argc,				/* I - Number of command-line args */
   memset(&pinfo, 0, sizeof(pinfo));
   pinfo.print_group = SERVER_GROUP_NONE;
   pinfo.proxy_group = SERVER_GROUP_NONE;
+  pinfo.web_forms   = 1;
 
   for (i = 1; i < argc; i ++)
   {
@@ -49,9 +50,31 @@ main(int  argc,				/* I - Number of command-line args */
     {
       usage(0);
     }
+    else if (!strcmp(argv[i], "--no-dns-sd"))
+    {
+      DNSSDEnabled = 0;
+    }
+    else if (!strcmp(argv[i], "--no-web-forms"))
+    {
+      pinfo.web_forms = 0;
+    }
     else if (!strcmp(argv[i], "--relaxed"))
     {
       RelaxedConformance = 1;
+    }
+    else if (!strcmp(argv[i], "--state"))
+    {
+      i ++;
+      if (i >= argc)
+        usage(1);
+
+      if (access(argv[i], R_OK) && mkdir(argv[i], 0700))
+      {
+        fprintf(stderr, "ippserver: Unable to access state directory \"%s\": %s\n", argv[i], strerror(errno));
+        usage(1);
+      }
+
+      StateDirectory = strdup(argv[i]);
     }
     else if (!strcmp(argv[i], "--version"))
     {
@@ -79,6 +102,24 @@ main(int  argc,				/* I - Number of command-line args */
 
               confdir = argv[i];
               break;
+
+	  case 'D' : /* -D device-uri */
+	      i ++;
+	      if (i >= argc)
+	        usage(1);
+
+
+	      pinfo.device_uri = argv[i];
+	      break;
+
+	  case 'F' : /* -F output-type/subtype */
+	      i ++;
+	      if (i >= argc)
+	        usage(1);
+
+
+	      pinfo.output_format = argv[i];
+	      break;
 
 #ifdef HAVE_SSL
 	  case 'K' : /* -K keypath */
@@ -230,7 +271,9 @@ main(int  argc,				/* I - Number of command-line args */
   }
 
   if (!name && !confdir)
+  {
     usage(1);
+  }
   else if (confdir)
   {
    /*
@@ -260,7 +303,7 @@ main(int  argc,				/* I - Number of command-line args */
     if (!serverCreateSystem(NULL))
       return (1);
 
-    if ((printer = serverCreatePrinter("/ipp/print", name, &pinfo, 1)) == NULL)
+    if ((printer = serverCreatePrinter("/ipp/print", name, name, &pinfo, 1)) == NULL)
       return (1);
 
     printer->state        = IPP_PSTATE_IDLE;
@@ -268,6 +311,9 @@ main(int  argc,				/* I - Number of command-line args */
 
     serverAddPrinter(printer);
   }
+
+  if (StateDirectory)
+    serverSaveSystem();
 
  /*
   * Enter the server main loop...
@@ -289,19 +335,23 @@ usage(int status)			/* O - Exit status */
   if (!status)
   {
     puts(CUPS_SVERSION);
-    puts("Copyright (c) 2014-2018 by the IEEE-ISTO Printer Working Group.");
-    puts("Copyright (c) 2010-2018 by Apple Inc.");
+    puts("Copyright (c) 2014-2019 by the IEEE-ISTO Printer Working Group.");
+    puts("Copyright (c) 2010-2019 by Apple Inc.");
     puts("");
   }
 
   puts("Usage: ippserver [options] \"name\"");
   puts("");
   puts("Options:");
-  puts("--help                  Show program help.");
-  puts("--relaxed               Run in relaxed conformance mode.");
-  puts("--version               Show program version.");
+  puts("--help                  Show program help");
+  puts("--no-dns-sd             Disable DNS-SD registrations");
+  puts("--no-web-forms          Disable web forms for materials, media, and supplies");
+  puts("--relaxed               Run in relaxed conformance mode");
+  puts("--version               Show program version");
   puts("-2                      Supports 2-sided printing (default=1-sided)");
-  puts("-C config-directory     Load settings and printers from the specified directory.");
+  puts("-C config-directory     Load settings and printers from the specified directory");
+  puts("-D device-uri           Set the device URI for the printer");
+  puts("-F output-type/subtype  Set the output format for the printer");
 #ifdef HAVE_SSL
   puts("-K keypath              Specifies the location of certificates and keys");
 #endif /* HAVE_SSL */
@@ -320,7 +370,7 @@ usage(int status)			/* O - Exit status */
   puts("-m model                Model name (default=Printer)");
   puts("-n hostname             Hostname for printer");
   puts("-p port                 Port number (default=auto)");
-  puts("-r subtype              Bonjour service subtype (default=_print)");
+  puts("-r subtype[,...]        DNS-SD service subtypes (default=_print)");
   puts("-s speed[,color-speed]  Speed in pages per minute (default=10,0)");
   puts("-v[v]                   Be (very) verbose");
 

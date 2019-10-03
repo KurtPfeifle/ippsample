@@ -1,7 +1,7 @@
 /*
  * API versioning definitions for CUPS.
  *
- * Copyright © 2007-2018 by Apple Inc.
+ * Copyright © 2007-2019 by Apple Inc.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
  * information.
@@ -96,7 +96,7 @@
  * Note: Using any of the _CUPS_API macros automatically adds _CUPS_PUBLIC.
  */
 
-#  if defined(__APPLE__) && !defined(_CUPS_SOURCE) && !TARGET_OS_IOS
+#  if defined(__APPLE__) && !defined(_CUPS_SOURCE) && TARGET_OS_OSX
 /*
  * On Apple operating systems, the _CUPS_API_* constants are defined using the
  * API_ macros in <os/availability.h>.
@@ -116,9 +116,9 @@
 #    define _CUPS_API_1_7 API_AVAILABLE(macos(10.9), ios(11.0)) _CUPS_PUBLIC
 #    define _CUPS_API_2_0 API_AVAILABLE(macos(10.10), ios(11.0)) _CUPS_PUBLIC
 #    define _CUPS_API_2_2 API_AVAILABLE(macos(10.12), ios(11.0)) _CUPS_PUBLIC
-#    define _CUPS_API_2_2_4 API_AVAILABLE(macos(10.13), ios(11.0)) _CUPS_PUBLIC
-#    define _CUPS_API_2_2_7 API_AVAILABLE(macos(10.14), ios(11.0)) _CUPS_PUBLIC
-#    define _CUPS_API_2_3 _CUPS_PUBLIC
+#    define _CUPS_API_2_2_4 API_AVAILABLE(macos(10.13), ios(12.0)) _CUPS_PUBLIC
+#    define _CUPS_API_2_2_7 API_AVAILABLE(macos(10.14), ios(13.0)) _CUPS_PUBLIC
+#    define _CUPS_API_2_3 API_AVAILABLE(macos(10.14), ios(13.0)) _CUPS_PUBLIC
 #  else
 #    define _CUPS_API_1_1_19 _CUPS_PUBLIC
 #    define _CUPS_API_1_1_20 _CUPS_PUBLIC
@@ -164,10 +164,10 @@
      */
 #    define _CUPS_DEPRECATED __attribute__ ((unavailable)) _CUPS_PUBLIC
 #    define _CUPS_DEPRECATED_MSG(m) __attribute__ ((unavailable(m))) _CUPS_PUBLIC
-#    define _CUPS_DEPRECATED_1_2_MSG(m) API_DEPRECATED(m, macos(10.2,10.5)) API_UNAVAILABLE(ios) _CUPS_PUBLIC
-#    define _CUPS_DEPRECATED_1_6_MSG(m) API_DEPRECATED(m, macos(10.2,10.8)) API_UNAVAILABLE(ios) _CUPS_PUBLIC
-#    define _CUPS_DEPRECATED_1_7_MSG(m) API_DEPRECATED(m, macos(10.2,10.9)) API_UNAVAILABLE(ios) _CUPS_PUBLIC
-#    define _CUPS_DEPRECATED_2_2_MSG(m) API_DEPRECATED(m, macos(10.2,10.12)) API_UNAVAILABLE(ios) _CUPS_PUBLIC
+#    define _CUPS_DEPRECATED_1_2_MSG(m) API_DEPRECATED(m, macos(10.2,10.5), ios(11.0,11.0)) _CUPS_PUBLIC
+#    define _CUPS_DEPRECATED_1_6_MSG(m) API_DEPRECATED(m, macos(10.2,10.8), ios(11.0,11.0)) _CUPS_PUBLIC
+#    define _CUPS_DEPRECATED_1_7_MSG(m) API_DEPRECATED(m, macos(10.2,10.9), ios(11.0,11.0)) _CUPS_PUBLIC
+#    define _CUPS_DEPRECATED_2_2_MSG(m) API_DEPRECATED(m, macos(10.2,10.12), ios(11.0,11.0)) _CUPS_PUBLIC
 
 #  elif defined(__APPLE__)
     /*
@@ -175,10 +175,10 @@
      */
 #    define _CUPS_DEPRECATED __attribute__ ((deprecated)) _CUPS_PUBLIC
 #    define _CUPS_DEPRECATED_MSG(m) __attribute__ ((deprecated(m))) _CUPS_PUBLIC
-#    define _CUPS_DEPRECATED_1_2_MSG(m) API_DEPRECATED(m, macos(10.2,10.5)) API_UNAVAILABLE(ios) _CUPS_PUBLIC
-#    define _CUPS_DEPRECATED_1_6_MSG(m) API_DEPRECATED(m, macos(10.2,10.8)) API_UNAVAILABLE(ios) _CUPS_PUBLIC
-#    define _CUPS_DEPRECATED_1_7_MSG(m) API_DEPRECATED(m, macos(10.2,10.9)) API_UNAVAILABLE(ios) _CUPS_PUBLIC
-#    define _CUPS_DEPRECATED_2_2_MSG(m) API_DEPRECATED(m, macos(10.2,10.12)) API_UNAVAILABLE(ios) _CUPS_PUBLIC
+#    define _CUPS_DEPRECATED_1_2_MSG(m) API_DEPRECATED(m, macos(10.2,10.5), ios(11.0,11.0)) _CUPS_PUBLIC
+#    define _CUPS_DEPRECATED_1_6_MSG(m) API_DEPRECATED(m, macos(10.2,10.8), ios(11.0,11.0)) _CUPS_PUBLIC
+#    define _CUPS_DEPRECATED_1_7_MSG(m) API_DEPRECATED(m, macos(10.2,10.9), ios(11.0,11.0)) _CUPS_PUBLIC
+#    define _CUPS_DEPRECATED_2_2_MSG(m) API_DEPRECATED(m, macos(10.2,10.12), ios(11.0,11.0)) _CUPS_PUBLIC
 
 #  elif defined(_CUPS_HAS_UNAVAILABLE_WITH_MESSAGE) && defined(_CUPS_NO_DEPRECATED)
     /*

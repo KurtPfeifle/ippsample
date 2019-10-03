@@ -1,15 +1,15 @@
 .\"
 .\" ippserver man page.
 .\"
-.\" Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group.
-.\" Copyright © 2014-2018 by Apple Inc.
+.\" Copyright © 2014-2019 by the IEEE-ISTO Printer Working Group.
+.\" Copyright © 2014-2019 by Apple Inc.
 .\"
 .\" Licensed under Apache License v2.0.  See the file "LICENSE" for more
 .\" information.
 .\"
-.TH ippserver 8 "ippsample" "2018-10-16" "Apple Inc."
+.TH ippserver 8 "ippsample" "2019-05-21" "Apple Inc."
 .SH NAME
-ippserver \- a simple ipp server
+ippserver \- a sample ipp server implementation
 .SH SYNOPSIS
 .B ippserver
 [
@@ -17,6 +17,12 @@ ippserver \- a simple ipp server
 ] [
 .B \-C
 .I config-directory
+] [
+.B \-D
+.I device-uri
+] [
+.B \-F
+.I output-type/subtype
 ] [
 .B \-K
 .I keypath
@@ -58,7 +64,7 @@ ippserver \- a simple ipp server
 .I port
 ] [
 .B \-r
-.I subtype
+.I subtype[,...,subtype]
 ] [
 .B \-s
 .I speed[,color-speed]
@@ -67,14 +73,21 @@ ippserver \- a simple ipp server
 ] [
 -B \-\-help
 ] [
+.B \-\-no\-dns\-sd
+] [
+.B \-\-no\-web\-forms
+] [
 -B \-\-relaxed
+] [
+-B \-\-state
+.I directory
 ] [
 -B \-\-version
 ]
 .I "service name"
 .SH DESCRIPTION
 .B ippserver
-is a simple Internet Printing Protocol (IPP) server conforming to the IPP Everywhere and IPP Shared Infrastructure Extensions (INFRA) specifications. It can be used as a standalone print server and/or a very basic infrastructure server between standard IPP clients and IPP proxies conforming to the INFRA specification.
+is a sample Internet Printing Protocol (IPP) server conforming to the IPP Everywhere, IPP Shared Infrastructure Extensions (INFRA), and IPP System Service specifications. It can be used as a standalone print server and/or a very basic infrastructure server between standard IPP clients and IPP proxies conforming to the INFRA specification.
 .SH OPTIONS
 The following options are recognized by
 .B ippserver:
@@ -85,6 +98,12 @@ Specifies that the printer supports two-sided printing.
 \fB\-C \fIconfig-directory\fR
 Specifies the location of a directory containing files that define the configuration of the server and the service instances that are available.
 See the section titled "CONFIGURATION DIRECTORIES" below.
+.TP 5
+\fB\-D \fIdevice-uri\fR
+Set the device URI for print output.
+.TP 5
+\fB\-F \fIoutput-type/subtype[,...]\fR
+Specifies the output MIME media type.
 .TP 5
 \fB\-K \fIkeypath\fR
 Specifies the location of TLS certificates and private keys.
@@ -131,12 +150,18 @@ The default is the name returned by the
 .BR hostname (1)
 command.
 .TP 5
+-B \-\-no\-dns\-sd
+Disables DNS-SD registrations.
+.TP 5
+-B \-\-no\-web\-forms
+Disables the GET-based web forms that allow web requests to change material, media, and supply levels.
+.TP 5
 \fB\-p \fIport\fR
 Specifies the port number to listen on.
 The default is a user-specific number from 8000 to 8999.
 .TP 5
-\fB\-r \fIsubtype\fR
-Specifies the Bonjour subtype to advertise for the printer.
+\fB\-r \fIsubtype[,...,subtype]\fR
+Specifies one or more comma-delimited DNS-SD subtypes to advertise for the printer.
 The default subtype is "_print".
 .TP 5
 .B \-\-relaxed
@@ -144,6 +169,11 @@ Runs the server in relaxed conformance mode, which allows certain harmless IPP c
 .TP 5
 \fB\-s \fIspeed[,color-speed]\fR
 Specifies the printer speed in pages-per-minute.
+.TP
+\fB\-\-state \fIdirectory\fR
+Specifies a persistent state directory to use.
+The directory is created if it does not exist.
+The default is to not save state information between runs.
 .TP 5
 .B \-v[vvv]
 Be (very) verbose when logging activity to the standard output.
@@ -187,6 +217,11 @@ The default is "No".
 Specifies the group of print administrators.
 The default administrator group is "wheel".
 .TP 5
+\fBAuthGroups \fIgroup [... group]\fR
+Specifies a list of groups that can be configured via IPP.
+If not specified, the default for non-root users is the list of groups the user belongs to.
+Otherwise, the default is the list of valid groups from "adm", "admin", "daemon", "operator", "staff", and/or "wheel".
+.TP 5
 \fBAuthName \fIrealm\fR
 Specifies the authentication realm name.
 The default realm name is "Printing".
@@ -194,6 +229,10 @@ The default realm name is "Printing".
 \fBAuthOperatorGroup \fIgroup\fR
 Specifies the group of print operators.
 The default operator group is the primary group for the user running the server.
+.TP 5
+\fBAuthProxyGroup \fIgroup\fR
+Specifies the group of print proxies.
+The default proxy group is the primary group for the user running the server.
 .TP 5
 \fBAuthService \fIname\fR
 Specifies the PAM service name.
@@ -323,6 +362,11 @@ Specifies the telephone number of the owner or administrator of the server.
 .TP 5
 \fBSpoolDir \fIpath\fR
 Specifies the location of print job spool files.
+The default is a per-process temporary directory.
+.TP 5
+\fBStateDir \fIpath\fR
+Specifies the location of persistent printer state files.
+The default is the empty string so no state is persisted.
 .TP 5
 \fBSubscriptionPrivacyAttributes \fI{all|default|none|list of attributes and groups}\fR
 Specifies which subscription object attribute values are considered private.
@@ -374,6 +418,21 @@ Specifies the manufacturer name for the printer.
 .TP 5
 \fBModel \fImodel\fR
 Specifies the model for the printer.
+.TP 5
+\fBOutputFormat \fItype/subtype\fR
+Specifies the output MIME media type for the printer.
+.TP 5
+\fBProfile \fIname filename.icc { ... }\fR
+Specifies a named ICC profile and any member Job Template attributes that select the profile.
+.TP 5
+\fBStrings \fIlanguage filename.strings\fR
+Specifies a localization ("strings") file for the specified language.
+.TP 5
+\fBWebForms Yes\fR
+.TP 5
+\fBWebForms No\fR
+Enables or disables GET-based web forms which are used to manipulate the material, media, and supply levels.
+The default is "Yes" to enable GET-based forms.
 .SS VARIABLES IN ATTRIBUTE VALUES
 .B ippserver
 defines the following additional
@@ -388,8 +447,11 @@ Specifies the port number of the server, for example "8501".
 .SS PRINT SERVICE ICON FILES
 The icon for each 2D print service is stored in the \fIprint/name.png\fR  file. Similarly, the icon for each 3D print service is stored in the \fIprint3d/name.png\fR file.
 .SH SEE ALSO
+.BR ippdoclint (7),
+.BR ipptransform (7),
+.BR ipptransform3d (7),
 .BR ipptoolfile (5),
 ISTO PWG Internet Printing Protocol Workgroup (http://www.pwg.org/ipp)
 .SH COPYRIGHT
-Copyright \[co] 2014-2018 by the IEEE-ISTO Printer Working Group.
-Copyright \[co] 2007-2018 by Apple Inc.
+Copyright \[co] 2014-2019 by the IEEE-ISTO Printer Working Group.
+Copyright \[co] 2007-2019 by Apple Inc.

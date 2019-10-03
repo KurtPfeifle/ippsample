@@ -49,7 +49,7 @@ serverAddEventNoLock(
   else
     text[0] = '\0';
 
-  serverLog(SERVER_LOGLEVEL_DEBUG, "serverAddEventNoLock(printer=%p(%s), job=%p(%d), event=0x%x, message=\"%s\")", (void *)printer, printer->name, (void *)job, job ? job->id : -1, event, text);
+  serverLog(SERVER_LOGLEVEL_DEBUG, "serverAddEventNoLock(printer=%p(%s), job=%p(%d), event=0x%x, message=\"%s\")", (void *)printer, printer ? printer->name : "(null)", (void *)job, job ? job->id : -1, event, text);
 
   _cupsRWLockRead(&SubscriptionsRWLock);
 
@@ -166,6 +166,7 @@ serverCreateSubscription(
   sub->mask     = notify_events ? serverGetNotifyEventsBits(notify_events) : SERVER_EVENT_DEFAULT;
   sub->printer  = client->printer;
   sub->job      = client->job;
+  sub->resource = client->resource;
   sub->interval = interval;
   sub->lease    = lease;
   sub->attrs    = ippNew();
@@ -203,6 +204,8 @@ serverCreateSubscription(
 
   if (client->job)
     ippAddInteger(sub->attrs, IPP_TAG_SUBSCRIPTION, IPP_TAG_INTEGER, "notify-job-id", client->job->id);
+  else if (client->resource)
+    ippAddInteger(sub->attrs, IPP_TAG_SUBSCRIPTION, IPP_TAG_INTEGER, "notify-resource-id", client->resource->id);
   else
     ippAddInteger(sub->attrs, IPP_TAG_SUBSCRIPTION, IPP_TAG_INTEGER, "notify-lease-duration", sub->lease);
 

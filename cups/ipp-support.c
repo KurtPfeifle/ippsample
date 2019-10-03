@@ -460,7 +460,7 @@ static const char * const ipp_document_states[] =
 		  "punch-multiple-top",	/* IPP Finishings 2.1/Canon */
 		  "punch-multiple-right",/* IPP Finishings 2.1/Canon */
 		  "punch-multiple-bottom",/* IPP Finishings 2.1/Canon */
-		  "fold-accordian",	/* IPP Finishings 2.0 */
+		  "fold-accordion",	/* IPP Finishings 2.0 */
 		  "fold-double-gate",	/* IPP Finishings 2.0 */
 		  "fold-gate",		/* IPP Finishings 2.0 */
 		  "fold-half",		/* IPP Finishings 2.0 */
@@ -571,7 +571,7 @@ static const char * const ipp_document_states[] =
 		  "0x40000057",
 		  "0x40000058",
 		  "0x40000059",
-		  "cups-fold-accordian",
+		  "cups-fold-accordion",
 		  "cups-fold-double-gate",
 		  "cups-fold-gate",
 		  "cups-fold-half",
@@ -1779,6 +1779,12 @@ ippCreateRequestedArray(ipp_t *request)	/* I - IPP request */
     "requesting-user-name-allowed",	/* CUPS extension */
     "requesting-user-name-denied",	/* CUPS extension */
     "requesting-user-uri-supported",
+    "smi2699-auth-print-group",		/* PWG ippserver extension */
+    "smi2699-auth-proxy-group",		/* PWG ippserver extension */
+    "smi2699-device-command",		/* PWG ippserver extension */
+    "smi2699-device-format",		/* PWG ippserver extension */
+    "smi2699-device-name",		/* PWG ippserver extension */
+    "smi2699-device-uri",		/* PWG ippserver extension */
     "subordinate-printers-supported",
     "subscription-privacy-attributes",	/* IPP Privacy Attributes */
     "subscription-privacy-scope",	/* IPP Privacy Attributes */
@@ -1874,6 +1880,11 @@ ippCreateRequestedArray(ipp_t *request)	/* I - IPP request */
     "power-timeout-policy-col",
     "printer-creation-attributes-supported",
     "resource-settable-attributes-supported",
+    "smi2699-auth-group-supported",	/* PWG ippserver extension */
+    "smi2699-device-command-supported",	/* PWG ippserver extension */
+    "smi2699-device-format-format",	/* PWG ippserver extension */
+    "smi2699-device-uri-schemes-supported",
+					/* PWG ippserver extension */
     "system-contact-col",
     "system-current-time",
     "system-default-printer-id",

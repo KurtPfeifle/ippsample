@@ -1,7 +1,7 @@
 /*
  * ipptool command for CUPS.
  *
- * Copyright © 2007-2018 by Apple Inc.
+ * Copyright © 2007-2019 by Apple Inc.
  * Copyright © 1997-2007 by Easy Software Products.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
@@ -176,7 +176,7 @@ static const char *get_string(ipp_attribute_t *attr, int element, int flags, cha
 static void	init_data(_cups_testdata_t *data);
 static char	*iso_date(const ipp_uchar_t *date);
 static void	pause_message(const char *message);
-static void	print_attr(cups_file_t *outfile, int output, ipp_attribute_t *attr, ipp_tag_t *group);
+static void	print_attr(cups_file_t *outfile, _cups_output_t output, ipp_attribute_t *attr, ipp_tag_t *group);
 static void	print_csv(_cups_testdata_t *data, ipp_t *ipp, ipp_attribute_t *attr, int num_displayed, char **displayed, size_t *widths);
 static void	print_fatal_error(_cups_testdata_t *data, const char *s, ...) _CUPS_FORMAT(2, 3);
 static void	print_ippserver_attr(_cups_testdata_t *data, ipp_attribute_t *attr, int indent);
@@ -239,6 +239,8 @@ main(int  argc,				/* I - Number of command-line args */
   init_data(&data);
 
   _ippVarsInit(&vars, NULL, (_ipp_ferror_cb_t)error_cb, (_ipp_ftoken_cb_t)token_cb);
+
+  _ippVarsSet(&vars, "date-start", iso_date(ippTimeToDate(time(NULL))));
 
  /*
   * We need at least:
@@ -845,7 +847,7 @@ copy_hex_string(char          *buffer,	/* I - String buffer */
     if (*dataptr < 0x20 || *dataptr >= 0x7f)
       break;
 
-  if (*dataptr)
+  if (dataptr < dataend)
   {
    /*
     * Yes, encode as hex...
@@ -1150,7 +1152,7 @@ do_test(_ipp_file_t      *f,		/* I - IPP data file */
 
     if (httpGetVersion(data->http) != HTTP_1_1)
     {
-      int version = httpGetVersion(data->http);
+      int version = (int)httpGetVersion(data->http);
 
       add_stringf(data->errors, "Bad HTTP version (%d.%d)", version / 100, version % 100);
     }
@@ -1446,7 +1448,7 @@ do_test(_ipp_file_t      *f,		/* I - IPP data file */
 	      _ippVarsSet(vars, expect->define_no_match, "1");
 	    else if (!expect->define_match && !expect->define_value)
 	    {
-	      if (found && expect->not_expect)
+	      if (found && expect->not_expect && !expect->with_value && !expect->with_value_from)
 		add_stringf(data->errors, "NOT EXPECTED: %s", expect->name);
 	      else if (!found && !(expect->not_expect || expect->optional))
 		add_stringf(data->errors, "EXPECTED: %s", expect->name);
@@ -2280,7 +2282,7 @@ pause_message(const char *message)	/* I - Message */
 
 static void
 print_attr(cups_file_t     *outfile,	/* I  - Output file */
-           int             output,	/* I  - Output format */
+           _cups_output_t  output,	/* I  - Output format */
            ipp_attribute_t *attr,	/* I  - Attribute to print */
            ipp_tag_t       *group)	/* IO - Current group */
 {
@@ -3992,6 +3994,8 @@ token_cb(_ipp_file_t      *f,		/* I - IPP file data */
       data->transfer      = data->def_transfer;
       data->version       = data->def_version;
 
+      _ippVarsSet(vars, "date-current", iso_date(ippTimeToDate(time(NULL))));
+
       f->attrs     = ippNew();
       f->group_tag = IPP_TAG_ZERO;
     }
@@ -4003,6 +4007,7 @@ token_cb(_ipp_file_t      *f,		/* I - IPP file data */
 
       if (_ippFileReadToken(f, name, sizeof(name)) && _ippFileReadToken(f, temp, sizeof(temp)))
       {
+        _ippVarsSet(vars, "date-current", iso_date(ippTimeToDate(time(NULL))));
         _ippVarsExpand(vars, value, temp, sizeof(value));
 	_ippVarsSet(vars, name, value);
       }
@@ -4022,6 +4027,7 @@ token_cb(_ipp_file_t      *f,		/* I - IPP file data */
       {
         if (!_ippVarsGet(vars, name))
         {
+          _ippVarsSet(vars, "date-current", iso_date(ippTimeToDate(time(NULL))));
 	  _ippVarsExpand(vars, value, temp, sizeof(value));
 	  _ippVarsSet(vars, name, value);
 	}
@@ -4040,6 +4046,7 @@ token_cb(_ipp_file_t      *f,		/* I - IPP file data */
 
       if (_ippFileReadToken(f, temp, sizeof(temp)))
       {
+        _ippVarsSet(vars, "date-current", iso_date(ippTimeToDate(time(NULL))));
         _ippVarsExpand(vars, data->file_id, temp, sizeof(data->file_id));
       }
       else
@@ -4298,33 +4305,31 @@ usage(void)
 {
   _cupsLangPuts(stderr, _("Usage: ipptool [options] URI filename [ ... filenameN ]"));
   _cupsLangPuts(stderr, _("Options:"));
-  _cupsLangPuts(stderr, _("  --help                  Show help."));
-  _cupsLangPuts(stderr, _("  --ippserver filename    Produce ippserver attribute file."));
-  _cupsLangPuts(stderr, _("  --stop-after-include-error\n"
-                          "                          Stop tests after a failed INCLUDE."));
-  _cupsLangPuts(stderr, _("  --version               Show version."));
-  _cupsLangPuts(stderr, _("  -4                      Connect using IPv4."));
-  _cupsLangPuts(stderr, _("  -6                      Connect using IPv6."));
-  _cupsLangPuts(stderr, _("  -C                      Send requests using "
-                          "chunking (default)."));
-  _cupsLangPuts(stderr, _("  -E                      Test with encryption using HTTP Upgrade to TLS."));
-  _cupsLangPuts(stderr, _("  -I                      Ignore errors."));
-  _cupsLangPuts(stderr, _("  -L                      Send requests using content-length."));
-  _cupsLangPuts(stderr, _("  -P filename.plist       Produce XML plist to a file and test report to standard output."));
-  _cupsLangPuts(stderr, _("  -S                      Test with encryption using HTTPS."));
-  _cupsLangPuts(stderr, _("  -T seconds              Set the receive/send timeout in seconds."));
-  _cupsLangPuts(stderr, _("  -V version              Set default IPP version."));
-  _cupsLangPuts(stderr, _("  -X                      Produce XML plist instead of plain text."));
-  _cupsLangPuts(stderr, _("  -c                      Produce CSV output."));
-  _cupsLangPuts(stderr, _("  -d name=value           Set named variable to value."));
-  _cupsLangPuts(stderr, _("  -f filename             Set default request filename."));
-  _cupsLangPuts(stderr, _("  -h                      Validate HTTP response headers."));
-  _cupsLangPuts(stderr, _("  -i seconds              Repeat the last file with the given time interval."));
-  _cupsLangPuts(stderr, _("  -l                      Produce plain text output."));
-  _cupsLangPuts(stderr, _("  -n count                Repeat the last file the given number of times."));
-  _cupsLangPuts(stderr, _("  -q                      Run silently."));
-  _cupsLangPuts(stderr, _("  -t                      Produce a test report."));
-  _cupsLangPuts(stderr, _("  -v                      Be verbose."));
+  _cupsLangPuts(stderr, _("--ippserver filename    Produce ippserver attribute file"));
+  _cupsLangPuts(stderr, _("--stop-after-include-error\n"
+                          "                        Stop tests after a failed INCLUDE"));
+  _cupsLangPuts(stderr, _("--version               Show version"));
+  _cupsLangPuts(stderr, _("-4                      Connect using IPv4"));
+  _cupsLangPuts(stderr, _("-6                      Connect using IPv6"));
+  _cupsLangPuts(stderr, _("-C                      Send requests using chunking (default)"));
+  _cupsLangPuts(stderr, _("-E                      Test with encryption using HTTP Upgrade to TLS"));
+  _cupsLangPuts(stderr, _("-I                      Ignore errors"));
+  _cupsLangPuts(stderr, _("-L                      Send requests using content-length"));
+  _cupsLangPuts(stderr, _("-P filename.plist       Produce XML plist to a file and test report to standard output"));
+  _cupsLangPuts(stderr, _("-S                      Test with encryption using HTTPS"));
+  _cupsLangPuts(stderr, _("-T seconds              Set the receive/send timeout in seconds"));
+  _cupsLangPuts(stderr, _("-V version              Set default IPP version"));
+  _cupsLangPuts(stderr, _("-X                      Produce XML plist instead of plain text"));
+  _cupsLangPuts(stderr, _("-c                      Produce CSV output"));
+  _cupsLangPuts(stderr, _("-d name=value           Set named variable to value"));
+  _cupsLangPuts(stderr, _("-f filename             Set default request filename"));
+  _cupsLangPuts(stderr, _("-h                      Validate HTTP response headers"));
+  _cupsLangPuts(stderr, _("-i seconds              Repeat the last file with the given time interval"));
+  _cupsLangPuts(stderr, _("-l                      Produce plain text output"));
+  _cupsLangPuts(stderr, _("-n count                Repeat the last file the given number of times"));
+  _cupsLangPuts(stderr, _("-q                      Run silently"));
+  _cupsLangPuts(stderr, _("-t                      Produce a test report"));
+  _cupsLangPuts(stderr, _("-v                      Be verbose"));
 
   exit(1);
 }
@@ -4542,7 +4547,7 @@ with_value(_cups_testdata_t *data,	/* I - Test data */
     case IPP_TAG_BOOLEAN :
 	for (i = 0; i < count; i ++)
 	{
-          if ((!strcmp(value, "true")) == ippGetBoolean(attr, i))
+          if ((!strcmp(value, "true") || !strcmp(value, "1")) == ippGetBoolean(attr, i))
           {
             if (!matchbuf[0])
 	      strlcpy(matchbuf, value, matchlen);
@@ -4773,7 +4778,74 @@ with_value(_cups_testdata_t *data,	/* I - Test data */
 	break;
 
     case IPP_TAG_STRING :
+        if (flags & _CUPS_WITH_REGEX)
+	{
+	 /*
+	  * Value is an extended, case-sensitive POSIX regular expression...
+	  */
+
+	  void		*adata;		/* Pointer to octetString data */
+	  int		adatalen;	/* Length of octetString */
+	  regex_t	re;		/* Regular expression */
+
+          if ((i = regcomp(&re, value, REG_EXTENDED | REG_NOSUB)) != 0)
+	  {
+            regerror(i, &re, temp, sizeof(temp));
+
+	    print_fatal_error(data, "Unable to compile WITH-VALUE regular expression \"%s\" - %s", value, temp);
+	    return (0);
+	  }
+
+         /*
+	  * See if ALL of the values match the given regular expression.
+	  */
+
+	  for (i = 0; i < count; i ++)
+	  {
+            if ((adata = ippGetOctetString(attr, i, &adatalen)) == NULL || adatalen >= (int)sizeof(temp))
+            {
+              match = 0;
+              break;
+            }
+            memcpy(temp, adata, (size_t)adatalen);
+            temp[adatalen] = '\0';
+
+	    if (!regexec(&re, temp, 0, NULL, 0))
+	    {
+	      if (!matchbuf[0])
+		strlcpy(matchbuf, temp, matchlen);
+
+	      if (!(flags & _CUPS_WITH_ALL))
+	      {
+	        match = 1;
+	        break;
+	      }
+	    }
+	    else if (flags & _CUPS_WITH_ALL)
+	    {
+	      match = 0;
+	      break;
+	    }
+	  }
+
+	  regfree(&re);
+
+	  if (!match && errors)
+	  {
+	    for (i = 0; i < count; i ++)
+	    {
+	      adata = ippGetOctetString(attr, i, &adatalen);
+	      copy_hex_string(temp, adata, adatalen, sizeof(temp));
+	      add_stringf(data->errors, "GOT: %s=\"%s\"", name, temp);
+	    }
+	  }
+	}
+	else
         {
+         /*
+          * Value is a literal or hex-encoded string...
+          */
+
           unsigned char	withdata[1023],	/* WITH-VALUE data */
 			*adata;		/* Pointer to octetString data */
 	  int		withlen,	/* Length of WITH-VALUE data */
@@ -4838,7 +4910,7 @@ with_value(_cups_testdata_t *data,	/* I - Test data */
 	    if (withlen == adatalen && !memcmp(withdata, adata, (size_t)withlen))
 	    {
 	      if (!matchbuf[0])
-	        copy_hex_string(matchbuf, adata, adatalen, matchlen);
+                copy_hex_string(matchbuf, adata, adatalen, matchlen);
 
 	      if (!(flags & _CUPS_WITH_ALL))
 	      {

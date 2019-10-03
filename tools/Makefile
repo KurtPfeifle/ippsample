@@ -1,8 +1,8 @@
 #
 # IPP tools makefile.
 #
-# Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group.
-# Copyright © 2007-2018 by Apple Inc.
+# Copyright © 2014-2019 by the IEEE-ISTO Printer Working Group.
+# Copyright © 2007-2019 by Apple Inc.
 # Copyright © 1997-2006 by Easy Software Products, all rights reserved.
 #
 # Licensed under Apache License v2.0.  See the file "LICENSE" for more
@@ -13,7 +13,9 @@ include ../Makedefs
 
 
 OBJS		=	\
+			ipp3dprinter.o \
 			ippdoclint.o \
+			ippeveprinter.o \
 			ippfind.o \
 			ippproxy.o \
 			ipptool.o \
@@ -21,13 +23,17 @@ OBJS		=	\
 			ipptransform3d.o
 TARGETS         =       \
                         $(BIN_TARGETS) \
+                        $(COMMAND_TARGETS) \
                         $(SBIN_TARGETS)
-BIN_TARGETS	=	\
+COMMAND_TARGETS	=	\
 			ippdoclint \
-			$(IPPFIND_BIN) \
-			ipptool \
 			$(IPPTRANSFORM_BIN) \
 			$(IPPTRANSFORM3D_BIN)
+BIN_TARGETS	=	\
+			ipp3dprinter \
+			ippeveprinter \
+			$(IPPFIND_BIN) \
+			ipptool
 SBIN_TARGETS	=	\
 			ippproxy
 
@@ -65,6 +71,10 @@ install:	all
 		destfile=`echo $$file | sed -e '1,$$s/^ipp/$(IPP)/'`; \
 		$(INSTALL_BIN) $$file $(BUILDROOT)$(bindir)/$$destfile; \
 	done
+	$(INSTALL_DIR) -m 755 $(BUILDROOT)$(libexecdir)/cups/command
+	for file in $(COMMAND_TARGETS); do \
+		$(INSTALL_BIN) $$file $(BUILDROOT)$(libexecdir)/cups/command; \
+	done
 	$(INSTALL_DIR) -m 755 $(BUILDROOT)$(sbindir)
 	for file in $(SBIN_TARGETS); do \
 		destfile=`echo $$file | sed -e '1,$$s/^ipp/$(IPP)/'`; \
@@ -80,12 +90,30 @@ test:
 
 
 #
+# ipp3dprinter
+#
+
+ipp3dprinter:	ipp3dprinter.o ../cups/libcups.a
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ ipp3dprinter.o $(LIBS)
+
+
+#
 # ippdoclint
 #
 
 ippdoclint:	ippdoclint.o ../cups/libcups.a
 	echo Linking $@...
 	$(CC) $(LDFLAGS) -o $@ ippdoclint.o $(LIBS)
+
+
+#
+# ippeveprinter
+#
+
+ippeveprinter:	ippeveprinter.o ../cups/libcups.a
+	echo Linking $@...
+	$(CC) $(LDFLAGS) -o $@ ippeveprinter.o $(LIBS)
 
 
 #

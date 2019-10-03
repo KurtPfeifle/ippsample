@@ -134,6 +134,10 @@ install:	all
 	for file in $(HEADERS); do \
 		$(INSTALL_DATA) $$file $(BUILDROOT)$(includedir)/cups; \
 	done
+	$(INSTALL_DIR) -m 755 $(BUILDROOT)$(datadir)/cups
+	for file in cupspm.epub cupspm.html cupspm.png; do \
+		$(INSTALL_DATA) $$file $(BUILDROOT)$(datadir)/cups; \
+	done
 
 
 #
@@ -170,7 +174,8 @@ libcups2.def: $(OBJS) Makefile
 	echo "VERSION 2.14" >>libcups2.def
 	echo "EXPORTS" >>libcups2.def
 	(nm $(LIBOBJS) 2>/dev/null | grep "T _" | awk '{print $$3}'; \
-	 echo __cups_strcpy; echo __cups_strlcat; echo __cups_strlcpy; echo __cups_gettimeofday) | \
+	 echo __cups_strcpy; echo __cups_strlcat; echo __cups_strlcpy; \
+	 echo __cups_snprintf; echo __cups_vsnprintf; echo __cups_gettimeofday) | \
 		grep -v -E \
 		    -e 'cups_debug|Apple|FileCheck|GSSService|SetNegotiate' \
 		    -e 'Block$$' | \
@@ -218,20 +223,16 @@ APISOURCES =	$(LIBOBJS:.o=.c) $(HEADERS)
 
 apihelp:
 	echo Generating CUPS API help files...
-	mxmldoc --title "CUPS API Programming Guide" \
-		--author "Michael R Sweet" \
-		--copyright "Copyright 2007-2018 by Apple Inc." \
-		--docversion $(IPPSAMPLE_VERSION) \
-		--intro api.intro \
-		api.xml $(APISOURCES) >../doc/api.html
-	mxmldoc --title "CUPS API Programming Guide" \
-		--author "Michael R Sweet" \
-		--copyright "Copyright 2007-2018 by Apple Inc." \
-		--docversion $(IPPSAMPLE_VERSION) \
-		--intro api.intro \
-		--epub ../doc/api.epub \
-		api.xml
-	$(RM) api.xml
+	$(RM) cupspm.xml
+	codedoc --section "Programming" --body cupspm.md \
+		cupspm.xml \
+		auth.c cups.h dest*.c encode.c http.h http*.c ipp.h ipp*.c \
+		options.c tls-darwin.c usersys.c util.c \
+		--coverimage cupspm.png \
+		--epub cupspm.epub
+	codedoc --section "Programming" --body cupspm.md \
+		cupspm.xml > cupspm.html
+	$(RM) cupspm.xml
 
 
 #

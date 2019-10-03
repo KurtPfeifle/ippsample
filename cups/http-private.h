@@ -154,21 +154,6 @@ typedef gnutls_certificate_credentials_t *http_tls_credentials_t;
  * for its IO and protocol management...
  */
 
-#    if !defined(HAVE_SECBASEPRIV_H) && defined(HAVE_CSSMERRORSTRING) /* Declare prototype for function in that header... */
-extern const char *cssmErrorString(int error);
-#    endif /* !HAVE_SECBASEPRIV_H && HAVE_CSSMERRORSTRING */
-#    if !defined(HAVE_SECIDENTITYSEARCHPRIV_H) && defined(HAVE_SECIDENTITYSEARCHCREATEWITHPOLICY) /* Declare prototype for function in that header... */
-extern OSStatus SecIdentitySearchCreateWithPolicy(SecPolicyRef policy,
-				CFStringRef idString, CSSM_KEYUSE keyUsage,
-				CFTypeRef keychainOrArray,
-				Boolean returnOnlyValidIdentities,
-				SecIdentitySearchRef* searchRef);
-#    endif /* !HAVE_SECIDENTITYSEARCHPRIV_H && HAVE_SECIDENTITYSEARCHCREATEWITHPOLICY */
-#    if !defined(HAVE_SECPOLICYPRIV_H) && defined(HAVE_SECPOLICYSETVALUE) /* Declare prototype for function in that header... */
-extern OSStatus SecPolicySetValue(SecPolicyRef policyRef,
-                                  const CSSM_DATA *value);
-#    endif /* !HAVE_SECPOLICYPRIV_H && HAVE_SECPOLICYSETVALUE */
-
 typedef SSLContextRef	http_tls_t;
 typedef CFArrayRef	http_tls_credentials_t;
 
@@ -329,48 +314,6 @@ struct _http_s				/**** HTTP connection structure ****/
 extern const char *_cups_hstrerror(int error);
 #    define hstrerror _cups_hstrerror
 #  endif /* !HAVE_HSTRERROR */
-
-
-/*
- * Some OS's don't have getifaddrs() and freeifaddrs()...
- */
-
-#  if !defined(_WIN32) && !defined(HAVE_GETIFADDRS)
-#    ifdef ifa_dstaddr
-#      undef ifa_dstaddr
-#    endif /* ifa_dstaddr */
-#    ifndef ifr_netmask
-#      define ifr_netmask ifr_addr
-#    endif /* !ifr_netmask */
-
-struct ifaddrs				/**** Interface Structure ****/
-{
-  struct ifaddrs	*ifa_next;	/* Next interface in list */
-  char			*ifa_name;	/* Name of interface */
-  unsigned int		ifa_flags;	/* Flags (up, point-to-point, etc.) */
-  struct sockaddr	*ifa_addr,	/* Network address */
-			*ifa_netmask;	/* Address mask */
-  union
-  {
-    struct sockaddr	*ifu_broadaddr;	/* Broadcast address of this interface. */
-    struct sockaddr	*ifu_dstaddr;	/* Point-to-point destination address. */
-  } ifa_ifu;
-
-  void			*ifa_data;	/* Interface statistics */
-};
-
-#    ifndef ifa_broadaddr
-#      define ifa_broadaddr ifa_ifu.ifu_broadaddr
-#    endif /* !ifa_broadaddr */
-#    ifndef ifa_dstaddr
-#      define ifa_dstaddr ifa_ifu.ifu_dstaddr
-#    endif /* !ifa_dstaddr */
-
-extern int	_cups_getifaddrs(struct ifaddrs **addrs) _CUPS_PRIVATE;
-#    define getifaddrs _cups_getifaddrs
-extern void	_cups_freeifaddrs(struct ifaddrs *addrs) _CUPS_PRIVATE;
-#    define freeifaddrs _cups_freeifaddrs
-#  endif /* !_WIN32 && !HAVE_GETIFADDRS */
 
 
 /*

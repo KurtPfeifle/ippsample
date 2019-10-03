@@ -1,8 +1,7 @@
 dnl
 dnl Common configuration stuff for CUPS.
 dnl
-dnl Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group.
-dnl Copyright © 2007-2018 by Apple Inc.
+dnl Copyright © 2007-2019 by Apple Inc.
 dnl Copyright © 1997-2007 by Easy Software Products, all rights reserved.
 dnl
 dnl Licensed under Apache License v2.0.  See the file "LICENSE" for more
@@ -54,6 +53,22 @@ AC_MSG_RESULT(using $INSTALL)
 dnl Check for pkg-config, which is used for some other tests later on...
 AC_PATH_TOOL(PKGCONFIG, pkg-config)
 
+dnl Check whether -std=standard is supported by the C compiler...
+if test -n "$GCC"; then
+	# Use -std=standard when possible to ensure that all available
+	# functions are available...
+	for standard in c11 c1x c99 c9x; do
+		OLDCFLAGS="$CFLAGS"
+		CFLAGS="$CFLAGS -std=$standard"
+		AC_MSG_CHECKING(whether compiler supports -std=$standard)
+		AC_TRY_COMPILE(,,[
+			AC_MSG_RESULT(yes)
+			break],[
+			AC_MSG_RESULT(no)
+			CFLAGS="$OLDCFLAGS"])
+	done
+fi
+
 dnl Check for libraries...
 AC_SEARCH_LIBS(abs, m, AC_DEFINE(HAVE_ABS))
 AC_SEARCH_LIBS(fmod, m)
@@ -92,7 +107,7 @@ AC_CHECK_FUNCS(statfs statvfs)
 
 dnl Checks for string functions.
 AC_CHECK_FUNCS(strdup strlcat strlcpy)
-if test "$uname" = "HP-UX" -a "$uversion" = "1020"; then
+if test "$host_os_name" = "hp-ux" -a "$host_os_version" = "1020"; then
 	echo Forcing snprintf emulation for HP-UX.
 else
 	AC_CHECK_FUNCS(snprintf vsnprintf)
@@ -102,8 +117,8 @@ dnl Check for random number functions...
 AC_CHECK_FUNCS(random lrand48 arc4random)
 
 dnl Checks for signal functions.
-case "$uname" in
-	Linux | GNU)
+case "$host_os_name" in
+	linux* | gnu*)
 		# Do not use sigset on Linux or GNU HURD
 		;;
 	*)
@@ -152,8 +167,8 @@ AC_SUBST(INSTALL_GZIP)
 AC_SUBST(LIBZ)
 
 dnl Flags for "ar" command...
-case $uname in
-        Darwin* | *BSD*)
+case $host_os_name in
+        darwin* | *bsd*)
                 ARFLAGS="-rcv"
                 ;;
         *)
@@ -164,13 +179,11 @@ esac
 AC_SUBST(ARFLAGS)
 
 dnl Extra platform-specific libraries...
-if test "$uname" = Darwin; then
+if test "$host_os_name" = darwin; then
 	LIBS="-framework SystemConfiguration -framework CoreFoundation -framework Security $LIBS"
 
 	dnl Check for framework headers...
 	AC_CHECK_HEADER(CoreFoundation/CoreFoundation.h,AC_DEFINE(HAVE_COREFOUNDATION_H))
-	AC_CHECK_HEADER(CoreFoundation/CFPriv.h,AC_DEFINE(HAVE_CFPRIV_H))
-	AC_CHECK_HEADER(CoreFoundation/CFBundlePriv.h,AC_DEFINE(HAVE_CFBUNDLEPRIV_H))
 fi
 
 dnl Transform utility...
@@ -181,11 +194,11 @@ AC_SUBST(IPPTRANSFORM_BIN)
 AC_SUBST(IPPTRANSFORM_HTML)
 AC_SUBST(IPPTRANSFORM_MAN)
 
-AC_ARG_WITH(pdfrip, [  --with-pdfrip=...        set PDF RIP to use (auto, coregraphics, mupdf, none)])
+AC_ARG_WITH(pdfrip, [  --with-pdfrip=...       set PDF RIP to use (auto, coregraphics, mupdf, none)])
 
 if test "x$with_pdfrip" = x -o "x$with_pdfrip" = xauto; then
-	case $uname in
-		Darwin*)
+	case $host_os_name in
+		darwin*)
 			use_pdfrip=coregraphics
 			;;
 		*)
@@ -206,7 +219,7 @@ case "$use_pdfrip" in
 			AC_DEFINE(HAVE_COREGRAPHICS)
 			IPPTRANSFORM_BIN="ipptransform"
 			IPPTRANSFORM_HTML="ipptransform.html"
-			IPPTRANSFORM_MAN="ipptransform.1"
+			IPPTRANSFORM_MAN="ipptransform.7"
 		],[
 			LIBS="$SAVELIBS"
 			if test "x$with_pdfrip" = xcoregraphics; then
@@ -218,12 +231,14 @@ case "$use_pdfrip" in
 		;;
 
 	mupdf)
-		AC_SEARCH_LIBS(FT_Init_FreeType, mupdfthird freetype)
-		AC_SEARCH_LIBS(jpeg_destroy_decompress, mupdfthird jpeg)
-		AC_SEARCH_LIBS(jbig2_ctx_new, mupdfthird jbig2dec)
-		AC_SEARCH_LIBS(opj_create_decompress, mupdfthird openjp2)
-		AC_SEARCH_LIBS(js_getcontext, mupdfthird)
-		AC_SEARCH_LIBS(hb_buffer_create, mupdfthird harfbuzz)
+		AC_SEARCH_LIBS(FT_Init_FreeType, mupdf-third mupdfthird freetype)
+		AC_SEARCH_LIBS(jpeg_std_error, mupdf-third mupdfthird jpeg)
+		AC_SEARCH_LIBS(jbig2_ctx_new, mupdf-third mupdfthird jbig2dec)
+		# Need to find mupdf-third symbol that doesn't have dependencies on libmupdf
+		AC_SEARCH_LIBS(opj_set_info_handler, mupdf-third mupdfthird openjp2)
+		# Need to find mupdf-third symbol that doesn't have dependencies on libmupdf
+		AC_SEARCH_LIBS(hb_tag_from_string, mupdf-third mupdfthird harfbuzz)
+		AC_SEARCH_LIBS(js_pop, mupdf-third mupdfthird)
 		AC_CHECK_LIB(mupdf, fz_drop_document,[
 			AC_MSG_RESULT([    Using MuPDF for PDF RIP])
 
@@ -231,7 +246,7 @@ case "$use_pdfrip" in
 			LIBS="-lmupdf $LIBS"
 			IPPTRANSFORM_BIN="ipptransform"
 			IPPTRANSFORM_HTML="ipptransform.html"
-			IPPTRANSFORM_MAN="ipptransform.1"
+			IPPTRANSFORM_MAN="ipptransform.7"
 
                         AC_MSG_CHECKING(for version of fz_new_pixmap function)
                         AC_TRY_COMPILE([#include <mupdf/fitz.h>],[
@@ -281,14 +296,14 @@ AC_SUBST(IPPTRANSFORM3D_HTML)
 AC_SUBST(IPPTRANSFORM3D_MAN)
 
 SAVEPATH="$PATH"
-PATH="$PATH:/Applications/Cura/Cura.app/Contents/Resources:/Applications/Cura.app/Contents/MacOS"
+PATH="$PATH:/Applications/Ultimaker Cura.app/Contents/MacOS:/Applications/Cura/Cura.app/Contents/Resources:/Applications/Cura.app/Contents/MacOS"
 AC_PATH_PROG(CURAENGINE,CuraEngine)
 PATH="$SAVEPATH"
 
 if test "x$CURAENGINE" != x; then
 	IPPTRANSFORM3D_BIN="ipptransform3d"
 	IPPTRANSFORM3D_HTML="ipptransform3d.html"
-	IPPTRANSFORM3D_MAN="ipptransform3d.1"
+	IPPTRANSFORM3D_MAN="ipptransform3d.7"
 
 	AC_DEFINE_UNQUOTED(CURAENGINE, "$CURAENGINE")
 fi

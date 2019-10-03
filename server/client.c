@@ -1,8 +1,8 @@
 /*
  * Client code for sample IPP server implementation.
  *
- * Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group
- * Copyright © 2010-2018 by Apple Inc.
+ * Copyright © 2014-2019 by the IEEE-ISTO Printer Working Group
+ * Copyright © 2010-2019 by Apple Inc.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
  * information.
@@ -17,12 +17,13 @@
  * Local functions...
  */
 
-static void		html_escape(server_client_t *client, const char *s,
-			            size_t slen);
+static void		html_escape(server_client_t *client, const char *s, size_t slen);
 static void		html_footer(server_client_t *client);
-static void		html_header(server_client_t *client, const char *title);
+static void		html_header(server_client_t *client, const char *title, int refresh);
 static void		html_printf(server_client_t *client, const char *format, ...) _CUPS_FORMAT(2, 3);
 static int		parse_options(server_client_t *client, cups_option_t **options);
+static int		send_mobile_config(server_client_t *client, server_printer_t *printer);
+static void		send_printer_payload(server_client_t *client, server_printer_t *printer);
 static int		show_materials(server_client_t *client, server_printer_t *printer, const char *encoding);
 static int		show_media(server_client_t *client, server_printer_t *printer, const char *encoding);
 static int		show_status(server_client_t *client, server_printer_t *printer, const char *encoding);
@@ -126,7 +127,7 @@ serverCreateListeners(const char *host,	/* I - Hostname, IP address, or NULL for
 
   httpAddrFreeList(addrlist);
 
-  return (1);
+  return (cupsArrayCount(Listeners) > 0);
 }
 
 
@@ -235,7 +236,9 @@ serverProcessHTTP(
 			hostname[HTTP_MAX_HOST];
 					/* Hostname */
   int			port;		/* Port number */
+  const char		*authorization;	/* Authorization value */
   const char		*encoding;	/* Content-Encoding value */
+  server_resource_t	*res;		/* Resource */
   static const char * const http_states[] =
   {					/* Strings for logging HTTP method */
     "WAITING",
@@ -420,6 +423,18 @@ serverProcessHTTP(
   }
 
  /*
+  * Handle Authorization...
+  */
+
+  authorization = httpGetField(client->http, HTTP_FIELD_AUTHORIZATION);
+
+  if (Authentication && *authorization && (http_status = serverAuthenticateClient(client)) != HTTP_STATUS_CONTINUE)
+  {
+    serverRespondHTTP(client, http_status, NULL, NULL, 0);
+    return (0);
+  }
+
+ /*
   * Handle new transfers...
   */
 
@@ -437,17 +452,17 @@ serverProcessHTTP(
     case HTTP_STATE_HEAD :
         if (!strncmp(client->uri, "/ipp/print/", 11))
         {
-          if ((uriptr = strchr(client->uri + 11, '/')) == NULL)
-            uriptr = client->uri + 10;
-
-	  *uriptr++ = '\0';
+          if ((uriptr = strchr(client->uri + 11, '/')) != NULL)
+	    *uriptr++ = '\0';
+	  else
+	    uriptr = client->uri + strlen(client->uri);
         }
         else if (!strncmp(client->uri, "/ipp/print3d/", 13))
         {
-          if ((uriptr = strchr(client->uri + 13, '/')) == NULL)
-            uriptr = client->uri + 12;
-
-	  *uriptr++ = '\0';
+          if ((uriptr = strchr(client->uri + 13, '/')) != NULL)
+	    *uriptr++ = '\0';
+	  else
+	    uriptr = client->uri + strlen(client->uri);
         }
         else if (!strcmp(client->uri, "/ipp/print"))
           uriptr = client->uri + strlen(client->uri);
@@ -463,23 +478,18 @@ serverProcessHTTP(
 
           if (printer)
           {
-            char *ext = strrchr(uriptr, '.');
-
-            if (!strcmp(uriptr, "icon.png"))
+            if (!strcmp(uriptr, "apple.mobileconfig"))
+              return (serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "application/x-apple-aspen-config", 0));
+            else if (!strcmp(uriptr, "icon.png"))
               return (serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "image/png", 0));
             else if (!*uriptr || !strcmp(uriptr, "materials") || !strcmp(uriptr, "media") || !strcmp(uriptr, "supplies"))
               return (serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "text/html", 0));
-            else if (ext && !strcmp(ext, ".strings"))
-            {
-              server_lang_t key;
-
-              *ext = '\0';
-              key.lang = uriptr;
-              if (cupsArrayFind(printer->pinfo.strings, &key))
-                return (serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "text/strings", 0));
-            }
           }
         }
+        else if (!strcmp(client->uri, "/ipp/system/apple.mobileconfig"))
+	  return (serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "application/x-apple-aspen-config", 0));
+        else if ((res = serverFindResourceByPath(client->uri)) != NULL && res->state == IPP_RSTATE_INSTALLED)
+          return (serverRespondHTTP(client, HTTP_STATUS_OK, NULL, res->format, 0));
 	else if (!strcmp(client->uri, "/"))
 	  return (serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "text/html", 0));
 
@@ -488,17 +498,17 @@ serverProcessHTTP(
     case HTTP_STATE_GET :
         if (!strncmp(client->uri, "/ipp/print/", 11))
         {
-          if ((uriptr = strchr(client->uri + 11, '/')) == NULL)
-            uriptr = client->uri + 10;
-
-	  *uriptr++ = '\0';
+          if ((uriptr = strchr(client->uri + 11, '/')) != NULL)
+	    *uriptr++ = '\0';
+	  else
+	    uriptr = client->uri + strlen(client->uri);
         }
         else if (!strncmp(client->uri, "/ipp/print3d/", 13))
         {
-          if ((uriptr = strchr(client->uri + 13, '/')) == NULL)
-            uriptr = client->uri + 12;
-
-	  *uriptr++ = '\0';
+          if ((uriptr = strchr(client->uri + 13, '/')) != NULL)
+	    *uriptr++ = '\0';
+	  else
+	    uriptr = client->uri + strlen(client->uri);
         }
         else if (!strcmp(client->uri, "/ipp/print"))
           uriptr = client->uri + strlen(client->uri);
@@ -514,9 +524,11 @@ serverProcessHTTP(
 
           if (printer)
           {
-            char *ext = strrchr(uriptr, '.');
-
-            if (!strcmp(uriptr, "icon.png"))
+            if (!strcmp(uriptr, "apple.mobileconfig"))
+            {
+              return (send_mobile_config(client, printer));
+            }
+            else if (!strcmp(uriptr, "icon.png"))
             {
              /*
               * Send PNG icon file.
@@ -527,11 +539,11 @@ serverProcessHTTP(
               char		buffer[4096];	/* Copy buffer */
               ssize_t		bytes;		/* Bytes */
 
-              if (printer->pinfo.icon)
+              if (printer->icon_resource)
               {
-                serverLogClient(SERVER_LOGLEVEL_DEBUG, client, "Icon file is \"%s\".", printer->pinfo.icon);
+                serverLogClient(SERVER_LOGLEVEL_DEBUG, client, "Icon file is \"%s\".", printer->icon_resource->filename);
 
-                if (!stat(printer->pinfo.icon, &fileinfo) && (fd = open(printer->pinfo.icon, O_RDONLY)) >= 0)
+                if (!stat(printer->icon_resource->filename, &fileinfo) && (fd = open(printer->icon_resource->filename, O_RDONLY | O_BINARY)) >= 0)
                 {
                   if (!serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "image/png", (size_t)fileinfo.st_size))
                   {
@@ -587,40 +599,37 @@ serverProcessHTTP(
             {
               return (show_supplies(client, printer, encoding));
             }
-            else if (ext && !strcmp(ext, ".strings"))
-            {
-              server_lang_t key, *match;
-
-              *ext = '\0';
-              key.lang = uriptr;
-              if ((match = (server_lang_t *)cupsArrayFind(printer->pinfo.strings, &key)) != NULL)
-              {
-                int		fd;		/* Icon file */
-                struct stat	fileinfo;	/* Icon file information */
-                char		buffer[4096];	/* Copy buffer */
-                ssize_t		bytes;		/* Bytes */
-
-                serverLogClient(SERVER_LOGLEVEL_DEBUG, client, "Strings file is \"%s\".", match->filename);
-
-                if (!stat(match->filename, &fileinfo) && (fd = open(match->filename, O_RDONLY)) >= 0)
-                {
-                  if (!serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "text/strings", (size_t)fileinfo.st_size))
-                  {
-                    close(fd);
-                    return (0);
-                  }
-
-                  while ((bytes = read(fd, buffer, sizeof(buffer))) > 0)
-                    httpWrite2(client->http, buffer, (size_t)bytes);
-
-                  httpFlushWrite(client->http);
-
-                  close(fd);
-                  return (1);
-                }
-              }
-            }
           }
+	}
+	else if (!strcmp(client->uri, "/ipp/system/apple.mobileconfig"))
+	{
+	  return (send_mobile_config(client, NULL));
+	}
+        else if ((res = serverFindResourceByPath(client->uri)) != NULL && res->state == IPP_RSTATE_INSTALLED)
+        {
+	  int		fd;		/* Icon file */
+	  struct stat	fileinfo;	/* Icon file information */
+	  char		buffer[4096];	/* Copy buffer */
+	  ssize_t	bytes;		/* Bytes */
+
+	  serverLogClient(SERVER_LOGLEVEL_DEBUG, client, "Resource \"%s\" maps to \"%s\".", res->resource, res->filename);
+
+	  if (!stat(res->filename, &fileinfo) && (fd = open(res->filename, O_RDONLY | O_BINARY)) >= 0)
+	  {
+	    if (!serverRespondHTTP(client, HTTP_STATUS_OK, NULL, res->format, (size_t)fileinfo.st_size))
+	    {
+	      close(fd);
+	      return (0);
+	    }
+
+	    while ((bytes = read(fd, buffer, sizeof(buffer))) > 0)
+	      httpWrite2(client->http, buffer, (size_t)bytes);
+
+	    httpFlushWrite(client->http);
+
+	    close(fd);
+	    return (1);
+	  }
 	}
 	else if (!strcmp(client->uri, "/"))
 	{
@@ -727,9 +736,6 @@ serverRespondHTTP(
 
     httpSetField(client->http, HTTP_FIELD_WWW_AUTHENTICATE, www_auth);
   }
-
-  if (code == HTTP_STATUS_METHOD_NOT_ALLOWED || client->operation == HTTP_STATE_OPTIONS)
-    httpSetField(client->http, HTTP_FIELD_ALLOW, "GET, HEAD, OPTIONS, POST");
 
   if (type)
   {
@@ -853,10 +859,13 @@ serverRun(void)
     }
 
 #ifdef HAVE_DNSSD
-    fd = DNSServiceRefSockFD(DNSSDMaster);
-    FD_SET(fd, &input);
-    if (max_fd < fd)
-      max_fd = fd;
+    if (DNSSDEnabled)
+    {
+      fd = DNSServiceRefSockFD(DNSSDMaster);
+      FD_SET(fd, &input);
+      if (max_fd < fd)
+        max_fd = fd;
+    }
 #endif /* HAVE_DNSSD */
 
     timeout.tv_sec  = 86400;
@@ -892,7 +901,7 @@ serverRun(void)
     }
 
 #ifdef HAVE_DNSSD
-    if (FD_ISSET(DNSServiceRefSockFD(DNSSDMaster), &input))
+    if (DNSSDEnabled && FD_ISSET(DNSServiceRefSockFD(DNSSDMaster), &input))
     {
       serverLog(SERVER_LOGLEVEL_DEBUG, "serverRun: Input on DNS-SD socket.");
       DNSServiceProcessResult(DNSSDMaster);
@@ -971,7 +980,8 @@ html_footer(server_client_t *client)	/* I - Client */
 
 static void
 html_header(server_client_t *client,	/* I - Client */
-            const char    *title)	/* I - Title */
+            const char      *title,	/* I - Title */
+            int             refresh)	/* I - Refresh timer, if any */
 {
   html_printf(client,
 	      "<!doctype html>\n"
@@ -980,7 +990,10 @@ html_header(server_client_t *client,	/* I - Client */
 	      "<title>%s</title>\n"
 	      "<link rel=\"shortcut icon\" href=\"/icon.png\" type=\"image/png\">\n"
 	      "<link rel=\"apple-touch-icon\" href=\"/icon.png\" type=\"image/png\">\n"
-	      "<meta http-equiv=\"X-UA-Compatible\" content=\"IE=9\">\n"
+	      "<meta http-equiv=\"X-UA-Compatible\" content=\"IE=9\">\n", title);
+  if (refresh > 0)
+    html_printf(client, "<meta http-equiv=\"refresh\" content=\"%d\">\n", refresh);
+  html_printf(client,
 	      "<meta name=\"viewport\" content=\"width=device-width\">\n"
 	      "<style>\n"
 	      "body { font-family: sans-serif; margin: 0; }\n"
@@ -989,9 +1002,11 @@ html_header(server_client_t *client,	/* I - Client */
 	      "div.body { padding: 0px 10px 10px; }\n"
               "div.even { background: #fcfcfc; margin-left: -10px; margin-right: -10px; padding: 5px 10px; width: 100%%; }\n"
               "div.odd { background: #f0f0f0; margin-left: -10px; margin-right: -10px; padding: 5px 10px; width: 100%%; }\n"
-	      "blockquote { background: #dfd; border-radius: 5px; color: #006; padding: 10px; }\n"
-	      "table.form { border-collapse: collapse; margin-top: 10px; width: 100%%; }\n"
-	      "table.form td, table.form th { padding: 5px 2px; width: 50%%; }\n"
+	      "span.badge { background: #090; border-radius: 5px; color: #fff; padding: 5px 10px; }\n"
+	      "span.bar { box-shadow: 0px 1px 5px #333; font-size: 75%%; }\n"
+	      "table.form { border-collapse: collapse; margin-left: auto; margin-right: auto; margin-top: 10px; width: auto; }\n"
+	      "table.form td, table.form th { padding: 5px 2px; }\n"
+	      "table.form td.meter { border-right: solid 1px #ccc; padding: 0px; width: 400px; }\n"
 	      "table.form th { text-align: right; }\n"
 	      "table.striped { border-bottom: solid thin black; border-collapse: collapse; width: 100%%; }\n"
 	      "table.striped tr:nth-child(even) { background: #fcfcfc; }\n"
@@ -1001,12 +1016,11 @@ html_header(server_client_t *client,	/* I - Client */
               "p.buttons { line-height: 200%%; }\n"
 	      "a.button { background: black; border-color: black; border-radius: 8px; color: white; font-size: 12px; padding: 4px 10px; text-decoration: none; white-space: nowrap; }\n"
               "a:hover.button { background: #444; border-color: #444; }\n"
-              "span.bar { border: thin black; box-shadow: 0px 0px 5px rgba(0,0,0,0.2); display: inline-block; height: 10px; width: 100px; }\n"
 	      "</style>\n"
 	      "</head>\n"
 	      "<body>\n"
 	      "<div class=\"header\"><a href=\"/\">" CUPS_SVERSION "</a></div>\n"
-	      "<div class=\"body\">\n", title);
+	      "<div class=\"body\">\n");
 }
 
 
@@ -1238,9 +1252,10 @@ html_printf(server_client_t *client,	/* I - Client */
 
 static int				/* O - Number of options */
 parse_options(server_client_t *client,	/* I - Client */
-              cups_option_t **options)	/* O - Options */
+              cups_option_t   **options)/* O - Options */
 {
-  char	*name,				/* Name */
+  char	*post_data = NULL,		/* POST form data */
+	*name,				/* Name */
       	*value,				/* Value */
 	*next;				/* Next name=value pair */
   int	num_options = 0;		/* Number of options */
@@ -1248,7 +1263,36 @@ parse_options(server_client_t *client,	/* I - Client */
 
   *options = NULL;
 
-  for (name = client->options; name && *name; name = next)
+  if (httpGetState(client->http) == HTTP_STATE_POST_RECV)
+  {
+    off_t	post_len = httpGetLength2(client->http);
+					/* Length of POST form data */
+
+    if (post_len == 0 || post_len > 65535)
+      post_len = 65535;
+
+    if ((post_data = calloc(1, (size_t)post_len + 1)) != NULL)
+    {
+      char	*post_ptr = post_data,	/* Pointer into POST form data */
+		*post_end = post_data + post_len;
+					/* Pointer to end of POST form data */
+      ssize_t	post_bytes;		/* Number of bytes read... */
+
+
+      while ((post_bytes = httpRead2(client->http, post_ptr, (size_t)(post_end - post_ptr))) > 0)
+      {
+        post_ptr += post_bytes;
+      }
+
+      *post_ptr = '\0';
+    }
+
+    name = post_data;
+  }
+  else
+    name = client->options;
+
+  while (name && *name)
   {
     if ((value = strchr(name, '=')) == NULL)
       break;
@@ -1258,9 +1302,128 @@ parse_options(server_client_t *client,	/* I - Client */
       *next++ = '\0';
 
     num_options = cupsAddOption(name, value, num_options, options);
+    name        = next;
   }
 
+  if (post_data)
+    free(post_data);
+
   return (num_options);
+}
+
+
+/*
+ * 'send_mobile_config()' - Send an Apple mobile configuration file for one or
+ *                          more printers.
+ */
+
+static int				/* O - 1 on success, 0 on failure */
+send_mobile_config(
+    server_client_t  *client,		/* I - Client connection */
+    server_printer_t *printer)		/* I - Printer to send (NULL for all) */
+{
+  if (!serverRespondHTTP(client, HTTP_STATUS_OK, NULL, "application/x-apple-aspen-config", 0))
+    return (0);
+
+  html_printf(client,
+              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+              "<!DOCTYPE plist PUBLIC \"-//Apple Computer//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+              "<plist version=\"1.0\">\n"
+              "\t<dict>\n"
+              "\t\t<key>PayloadIdentifier</key>\n"
+              "\t\t<string>org.pwg.ippserver.%s</string>\n"
+              "\t\t<key>PayloadUUID</key>\n"
+              "\t\t<string>Unused</string>\n"
+              "\t\t<key>PayloadType</key>\n"
+              "\t\t<string>Configuration</string>\n"
+              "\t\t<key>PayloadVersion</key>\n"
+              "\t\t<integer>1</integer>\n"
+              "\t\t<key>PayloadDescription</key>\n"
+              "\t\t<string>Printers on %s.</string>\n"
+              "\t\t<key>PayloadDisplayName</key>\n"
+              "\t\t<string>%s Printers</string>\n"
+              "\t\t<key>PayloadContent</key>\n"
+              "\t\t<array>\n", ServerName, ServerName, ServerName);
+
+  if (printer)
+  {
+    send_printer_payload(client, printer);
+  }
+  else
+  {
+    _cupsRWLockRead(&PrintersRWLock);
+    for (printer = (server_printer_t *)cupsArrayFirst(Printers); printer; printer = (server_printer_t *)cupsArrayNext(Printers))
+    {
+      if (printer->type == SERVER_TYPE_PRINT)
+        send_printer_payload(client, printer);
+    }
+    _cupsRWUnlock(&PrintersRWLock);
+  }
+
+  html_printf(client,
+              "\t\t</array>\n"
+              "\t</dict>\n"
+              "</plist>\n");
+  httpWrite2(client->http, "", 0);
+
+  return (1);
+}
+
+
+/*
+ * 'send_printer_payload()' - Send the mobile configuration payload for a
+ *                            printer.
+ */
+
+static void
+send_printer_payload(
+    server_client_t  *client,		/* I - Client connection */
+    server_printer_t *printer)		/* I - Printer to send */
+{
+
+  const char	*make_and_model,	/* printer-make-and-model value */
+		*uuid;			/* printer-uuid value */
+
+  _cupsRWLockRead(&printer->rwlock);
+
+  make_and_model = ippGetString(ippFindAttribute(printer->pinfo.attrs, "printer-make-and-model", IPP_TAG_TEXT), 0, NULL);
+  uuid           = ippGetString(ippFindAttribute(printer->pinfo.attrs, "printer-uuid", IPP_TAG_URI), 0, NULL);
+
+  if (uuid)
+    uuid += 9;				/* Skip "urn:uuid:" URI prefix */
+  else
+    uuid = "unknown";
+
+  html_printf(client,
+              "\t\t\t<dict>\n"
+              "\t\t\t\t<key>PayloadIdentifier</key>\n"
+              "\t\t\t\t<string>org.pwg.ippserver.%s.%s</string>\n"
+              "\t\t\t\t<key>PayloadUUID</key>\n"
+              "\t\t\t\t<string>%s</string>\n"
+              "\t\t\t\t<key>PayloadType</key>\n"
+              "\t\t\t\t<string>com.apple.airprint</string>\n"
+              "\t\t\t\t<key>PayloadVersion</key>\n"
+              "\t\t\t\t<integer>1</integer>\n"
+              "\t\t\t\t<key>PayloadDescription</key>\n"
+              "\t\t\t\t<string>%s</string>\n"
+              "\t\t\t\t<key>PayloadDisplayName</key>\n"
+              "\t\t\t\t<string>%s</string>\n"
+              "\t\t\t\t<key>AirPrint</key>\n"
+              "\t\t\t\t<array>\n"
+              "\t\t\t\t\t<dict>\n"
+              "\t\t\t\t\t\t<key>IPAddress</key>\n"
+              "\t\t\t\t\t\t<string>%s</string>\n"
+              "\t\t\t\t\t\t<key>ResourcePath</key>\n"
+              "\t\t\t\t\t\t<string>%s</string>\n"
+              "\t\t\t\t\t\t<key>Port</key>\n"
+              "\t\t\t\t\t\t<integer>%d</integer>\n"
+              "\t\t\t\t\t\t<key>ForceTLS</key>\n"
+              "\t\t\t\t\t\t<true />\n"
+              "\t\t\t\t\t</dict>\n"
+              "\t\t\t\t</array>\n"
+              "\t\t\t</dict>\n", ServerName, uuid, uuid, make_and_model ? make_and_model : "unknown", printer->dns_sd_name, ServerName, printer->resource, DefaultPort);
+
+  _cupsRWUnlock(&printer->rwlock);
 }
 
 
@@ -1282,10 +1445,11 @@ show_materials(
   ipp_t			*materials_col;	/* materials-col-xxx value */
   const char            *material_name,	/* materials-col-database material-name value */
                         *material_key,	/* materials-col-database material-key value */
-                        *ready_key;	/* materials-col-ready material-key value */
+                        *ready_key,	/* materials-col-ready material-key value */
+                        *ready_name;	/* materials-col-ready marterial-name value */
   int			max_materials;	/* max-materials-col-supported value */
-  int			num_options;	/* Number of form options */
-  cups_option_t		*options;	/* Form options */
+  int			num_options = 0;/* Number of form options */
+  cups_option_t		*options = NULL;/* Form options */
 
 
  /*
@@ -1295,10 +1459,10 @@ show_materials(
   if (!serverRespondHTTP(client, HTTP_STATUS_OK, encoding, "text/html", 0))
     return (0);
 
-  html_header(client, printer->dnssd_name);
+  html_header(client, printer->dns_sd_name, 0);
 
   html_printf(client, "<p class=\"buttons\"><a class=\"button\" href=\"/\">Show Printers</a> <a class=\"button\" href=\"%s\">Show Jobs</a></p>\n", printer->resource);
-  html_printf(client, "<h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s Materials</h1>\n", printer->resource, printer->dnssd_name);
+  html_printf(client, "<h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s Materials</h1>\n", printer->resource, printer->dns_sd_name);
 
   if ((materials_db = ippFindAttribute(printer->pinfo.attrs, "materials-col-database", IPP_TAG_BEGIN_COLLECTION)) == NULL)
   {
@@ -1327,7 +1491,10 @@ show_materials(
   * Process form data if present...
   */
 
-  if ((num_options = parse_options(client, &options)) > 0)
+  if (printer->pinfo.web_forms)
+    num_options = parse_options(client, &options);
+
+  if (num_options > 0)
   {
    /*
     * WARNING: A real printer/server implementation MUST NOT implement
@@ -1371,15 +1538,14 @@ show_materials(
       materials_ready = ippAddOutOfBand(printer->pinfo.attrs, IPP_TAG_PRINTER, IPP_TAG_NOVALUE, "materials-col-ready");
 
     _cupsRWUnlock(&printer->rwlock);
-
-    html_printf(client, "<blockquote>Materials updated.</blockquote>\n");
   }
 
  /*
   * Show the currently loaded materials and allow the user to make selections...
   */
 
-  html_printf(client, "<form method=\"GET\" action=\"%s/materials\">\n", printer->resource);
+  if (printer->pinfo.web_forms)
+    html_printf(client, "<form method=\"GET\" action=\"%s/materials\">\n", printer->resource);
 
   html_printf(client, "<table class=\"form\" summary=\"Materials\">\n");
 
@@ -1388,26 +1554,54 @@ show_materials(
     materials_col = ippGetCollection(materials_ready, i);
     ready_key     = ippGetString(ippFindAttribute(materials_col, "material-key", IPP_TAG_ZERO), 0, NULL);
 
-    html_printf(client, "<tr><th>Material %d:</th><td><select name=\"material%d\"><option value=\"\">None</option>", i + 1, i);
-    for (j = 0, count = ippGetCount(materials_db); j < count; j ++)
+    html_printf(client, "<tr><th>Material %d:</th>", i + 1);
+    if (printer->pinfo.web_forms)
     {
-      materials_col = ippGetCollection(materials_db, j);
-      material_key  = ippGetString(ippFindAttribute(materials_col, "material-key", IPP_TAG_ZERO), 0, NULL);
-      material_name = ippGetString(ippFindAttribute(materials_col, "material-name", IPP_TAG_NAME), 0, NULL);
+      html_printf(client, "<td><select name=\"material%d\"><option value=\"\">None</option>", i);
+      for (j = 0, count = ippGetCount(materials_db); j < count; j ++)
+      {
+	materials_col = ippGetCollection(materials_db, j);
+	material_key  = ippGetString(ippFindAttribute(materials_col, "material-key", IPP_TAG_ZERO), 0, NULL);
+	material_name = ippGetString(ippFindAttribute(materials_col, "material-name", IPP_TAG_NAME), 0, NULL);
 
-      if (material_key && material_name)
-        html_printf(client, "<option value=\"%s\"%s>%s</option>", material_key, ready_key && material_key && !strcmp(ready_key, material_key) ? " selected" : "", material_name);
-      else if (material_key)
-        html_printf(client, "<!-- Error: no material-name for material-key=\"%s\" -->", material_key);
-      else if (material_name)
-        html_printf(client, "<!-- Error: no material-key for material-name=\"%s\" -->", material_name);
-      else
-        html_printf(client, "<!-- Error: no material-key or material-name for materials-col-database[%d] -->", j + 1);
+	if (material_key && material_name)
+	  html_printf(client, "<option value=\"%s\"%s>%s</option>", material_key, ready_key && material_key && !strcmp(ready_key, material_key) ? " selected" : "", material_name);
+	else if (material_key)
+	  html_printf(client, "<!-- Error: no material-name for material-key=\"%s\" -->", material_key);
+	else if (material_name)
+	  html_printf(client, "<!-- Error: no material-key for material-name=\"%s\" -->", material_name);
+	else
+	  html_printf(client, "<!-- Error: no material-key or material-name for materials-col-database[%d] -->", j + 1);
+      }
+      html_printf(client, "</select></td></tr>\n");
     }
-    html_printf(client, "</select></td></tr>\n");
+    else if ((ready_name = ippGetString(ippFindAttribute(materials_col, "material-name", IPP_TAG_ZERO), 0, NULL)) != NULL)
+      html_printf(client, "%s</td></tr>\n", ready_name);
+    else if (ready_key)
+      html_printf(client, "%s</td></tr>\n", ready_key);
+    else
+      html_printf(client, "None</td></tr>\n");
   }
 
-  html_printf(client, "<tr><td></td><td><input type=\"submit\" value=\"Update Materials\"></td></tr></table></form>\n");
+  if (printer->pinfo.web_forms)
+  {
+    html_printf(client, "<tr><td></td><td><input type=\"submit\" value=\"Update Materials\">");
+    if (num_options > 0)
+      html_printf(client, " <span class=\"badge\" id=\"status\">Material updated.</span>\n");
+    html_printf(client, "</td></tr></table></form>\n");
+
+    if (num_options > 0)
+      html_printf(client, "<script>\n"
+			  "setTimeout(hide_status, 3000);\n"
+			  "function hide_status() {\n"
+			  "  var status = document.getElementById('status');\n"
+			  "  status.style.display = 'none';\n"
+			  "}\n"
+			  "</script>\n");
+  }
+  else
+    html_printf(client, "</table>\n");
+
   html_footer(client);
 
   return (1);
@@ -1447,8 +1641,8 @@ show_media(server_client_t  *client,	/* I - Client connection */
 			*tray_ptr;	/* Pointer into value */
   int			tray_len;	/* Length of printer-input-tray value */
   int			ready_sheets;	/* printer-input-tray sheets value */
-  int			num_options;	/* Number of form options */
-  cups_option_t		*options;	/* Form options */
+  int			num_options = 0;/* Number of form options */
+  cups_option_t		*options = NULL;/* Form options */
   static const int	sheets[] =	/* Number of sheets */
   {
     250,
@@ -1462,10 +1656,10 @@ show_media(server_client_t  *client,	/* I - Client connection */
   if (!serverRespondHTTP(client, HTTP_STATUS_OK, encoding, "text/html", 0))
     return (0);
 
-  html_header(client, printer->name);
+  html_header(client, printer->name, 0);
 
   html_printf(client, "<p class=\"buttons\"><a class=\"button\" href=\"/\">Show Printers</a> <a class=\"button\" href=\"%s\">Show Jobs</a> <a class=\"button\" href=\"%s/supplies\">Show Supplies</a></p>\n", printer->resource, printer->resource);
-  html_printf(client, "<h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s Media</h1>\n", printer->resource, printer->dnssd_name);
+  html_printf(client, "<h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s Media</h1>\n", printer->resource, printer->dns_sd_name);
 
   if ((media_col_ready = ippFindAttribute(printer->pinfo.attrs, "media-col-ready", IPP_TAG_BEGIN_COLLECTION)) == NULL)
   {
@@ -1520,7 +1714,10 @@ show_media(server_client_t  *client,	/* I - Client connection */
   * Process form data if present...
   */
 
-  if ((num_options = parse_options(client, &options)) > 0)
+  if (printer->pinfo.web_forms)
+    num_options = parse_options(client, &options);
+
+  if (num_options > 0)
   {
    /*
     * WARNING: A real printer/server implementation MUST NOT implement
@@ -1625,11 +1822,10 @@ show_media(server_client_t  *client,	/* I - Client connection */
       media_ready = ippAddOutOfBand(printer->pinfo.attrs, IPP_TAG_PRINTER, IPP_TAG_NOVALUE, "media-ready");
 
     _cupsRWUnlock(&printer->rwlock);
-
-    html_printf(client, "<blockquote>Media updated.</blockquote>\n");
   }
 
-  html_printf(client, "<form method=\"GET\" action=\"%s/media\">\n", printer->resource);
+  if (printer->pinfo.web_forms)
+    html_printf(client, "<form method=\"GET\" action=\"%s/media\">\n", printer->resource);
 
   html_printf(client, "<table class=\"form\" summary=\"Media\">\n");
   for (i = 0; i < num_sources; i ++)
@@ -1655,27 +1851,38 @@ show_media(server_client_t  *client,	/* I - Client connection */
     * Media size...
     */
 
-    html_printf(client, "<tr><th>%s:</th><td><select name=\"size%d\"><option value=\"\">None</option>", media_source, i);
-    for (j = 0; j < num_sizes; j ++)
+    html_printf(client, "<tr><th>%s:</th>", media_source);
+    if (printer->pinfo.web_forms)
     {
-      media_size = ippGetString(media_sizes, j, NULL);
+      html_printf(client, "<td><select name=\"size%d\"><option value=\"\">None</option>", i);
+      for (j = 0; j < num_sizes; j ++)
+      {
+        media_size = ippGetString(media_sizes, j, NULL);
 
-      html_printf(client, "<option%s>%s</option>", (ready_size && !strcmp(ready_size, media_size)) ? " selected" : "", media_size);
+        html_printf(client, "<option%s>%s</option>", (ready_size && !strcmp(ready_size, media_size)) ? " selected" : "", media_size);
+      }
+      html_printf(client, "</select>\n");
     }
-    html_printf(client, "</select>\n");
+    else
+      html_printf(client, "<td>%s", ready_size);
 
    /*
     * Media type...
     */
 
-    html_printf(client, "<select name=\"type%d\"><option value=\"\">None</option>", i);
-    for (j = 0; j < num_types; j ++)
+    if (printer->pinfo.web_forms)
     {
-      media_type = ippGetString(media_types, j, NULL);
+      html_printf(client, "<select name=\"type%d\"><option value=\"\">None</option>", i);
+      for (j = 0; j < num_types; j ++)
+      {
+	media_type = ippGetString(media_types, j, NULL);
 
-      html_printf(client, "<option%s>%s</option>", (ready_type && !strcmp(ready_type, media_type)) ? " selected" : "", media_type);
+	html_printf(client, "<option%s>%s</option>", (ready_type && !strcmp(ready_type, media_type)) ? " selected" : "", media_type);
+      }
+      html_printf(client, "</select>\n");
     }
-    html_printf(client, "</select>\n");
+    else if (ready_type)
+      html_printf(client, ", %s", ready_type);
 
    /*
     * Level/sheets loaded...
@@ -1696,13 +1903,38 @@ show_media(server_client_t  *client,	/* I - Client connection */
     else
       ready_sheets = 0;
 
-    html_printf(client, "<select name=\"level%d\">", i);
-    for (j = 0; j < (int)(sizeof(sheets) / sizeof(sheets[0])); j ++)
-      html_printf(client, "<option value=\"%d\"%s>%d sheets</option>", sheets[j], sheets[j] == ready_sheets ? " selected" : "", sheets[j]);
-    html_printf(client, "</select></td></tr>\n");
+    if (printer->pinfo.web_forms)
+    {
+      html_printf(client, "<select name=\"level%d\">", i);
+      for (j = 0; j < (int)(sizeof(sheets) / sizeof(sheets[0])); j ++)
+	html_printf(client, "<option value=\"%d\"%s>%d sheets</option>", sheets[j], sheets[j] == ready_sheets ? " selected" : "", sheets[j]);
+      html_printf(client, "</select></td></tr>\n");
+    }
+    else if (ready_sheets > 0)
+      html_printf(client, ", %d sheets</td></tr>\n", ready_sheets);
+    else
+      html_printf(client, "</td></tr>\n");
   }
 
-  html_printf(client, "<tr><td></td><td><input type=\"submit\" value=\"Update Media\"></td></tr></table></form>\n");
+  if (printer->pinfo.web_forms)
+  {
+    html_printf(client, "<tr><td></td><td><input type=\"submit\" value=\"Update Media\">");
+    if (num_options > 0)
+      html_printf(client, " <span class=\"badge\" id=\"status\">Media updated.</span>\n");
+    html_printf(client, "</td></tr></table></form>\n");
+
+    if (num_options > 0)
+      html_printf(client, "<script>\n"
+			  "setTimeout(hide_status, 3000);\n"
+			  "function hide_status() {\n"
+			  "  var status = document.getElementById('status');\n"
+			  "  status.style.display = 'none';\n"
+			  "}\n"
+			  "</script>\n");
+  }
+  else
+    html_printf(client, "</table>\n");
+
   html_footer(client);
 
   return (1);
@@ -1721,6 +1953,7 @@ show_status(server_client_t  *client,	/* I - Client connection */
   server_job_t		*job;		/* Current job */
   int			i, j;		/* Looping vars */
   server_preason_t	reason;		/* Current reason */
+  int			apple_client;	/* Is the client running an Apple OS? */
   static const char * const reasons[] =	/* Reason strings */
   {
     "Other",
@@ -1742,17 +1975,26 @@ show_status(server_client_t  *client,	/* I - Client connection */
   };
 
 
+  apple_client = strstr(httpGetField(client->http, HTTP_FIELD_USER_AGENT), "Mac OS X") != NULL;
+
   if (!serverRespondHTTP(client, HTTP_STATUS_OK, encoding, "text/html", 0))
     return (0);
 
   if (printer)
   {
-    html_header(client, printer->dnssd_name);
+    html_header(client, printer->dns_sd_name, printer->state == IPP_PSTATE_PROCESSING ? 5 : 15);
     if (!strncmp(printer->resource, "/ipp/print3d", 12))
+    {
       html_printf(client, "<p class=\"buttons\"><a class=\"button\" href=\"/\">Show Printers</a> <a class=\"button\" href=\"%s/materials\">Show Materials</a>\n", printer->resource);
+    }
     else
-      html_printf(client, "<p class=\"buttons\"><p class=\"buttons\"><a class=\"button\" href=\"/\">Show Printers</a> <a class=\"button\" href=\"%s/media\">Show Media</a> <a class=\"button\" href=\"%s/supplies\">Show Supplies</a></p>\n", printer->resource, printer->resource);
-    html_printf(client, "<h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s Jobs</h1>\n", printer->resource, printer->dnssd_name);
+    {
+      html_printf(client, "<p class=\"buttons\"><p class=\"buttons\"><a class=\"button\" href=\"/\">Show Printers</a> <a class=\"button\" href=\"%s/media\">Show Media</a> <a class=\"button\" href=\"%s/supplies\">Show Supplies</a>", printer->resource, printer->resource);
+      if (apple_client)
+        html_printf(client, " <a class=\"button\" href=\"%s/apple.mobileconfig\">Use on iOS</a>", printer->resource);
+      html_printf(client, "</p>\n");
+    }
+    html_printf(client, "<h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s Jobs</h1>\n", printer->resource, printer->dns_sd_name);
     html_printf(client, "<p>%s, %d job(s).", printer->state == IPP_PSTATE_IDLE ? "Idle" : printer->state == IPP_PSTATE_PROCESSING ? "Printing" : "Stopped", cupsArrayCount(printer->jobs));
     for (i = 0, reason = 1; i < (int)(sizeof(reasons) / sizeof(reasons[0])); i ++, reason <<= 1)
       if (printer->state_reasons & reason)
@@ -1799,20 +2041,27 @@ show_status(server_client_t  *client,	/* I - Client connection */
   }
   else
   {
-    html_header(client, CUPS_SVERSION);
+    html_header(client, CUPS_SVERSION, 0);
     for (i = 0, printer = (server_printer_t *)cupsArrayFirst(Printers); printer; i ++, printer = (server_printer_t *)cupsArrayNext(Printers))
     {
       html_printf(client, "<div class=\"%s\">\n", (i & 1) ? "odd" : "even");
-      html_printf(client, "  <h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s</h1>\n", printer->resource, printer->dnssd_name);
+      html_printf(client, "  <h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s</h1>\n", printer->resource, printer->dns_sd_name);
       html_printf(client, "  <p>%s, %d job(s).", printer->state == IPP_PSTATE_IDLE ? "Idle" : printer->state == IPP_PSTATE_PROCESSING ? "Printing" : "Stopped", cupsArrayCount(printer->jobs));
       for (j = 0, reason = 1; j < (int)(sizeof(reasons) / sizeof(reasons[0])); j ++, reason <<= 1)
         if (printer->state_reasons & reason)
           html_printf(client, "\n<br>&nbsp;&nbsp;&nbsp;&nbsp;%s", reasons[j]);
       html_printf(client, "</p>\n");
       if (!strncmp(printer->resource, "/ipp/print3d", 12))
+      {
         html_printf(client, "  <p class=\"buttons\"><a class=\"button\" href=\"%s\">Show Jobs</a> <a class=\"button\" href=\"%s/materials\">Show Materials</a></p>\n", printer->resource, printer->resource);
+      }
       else
-        html_printf(client, "  <p class=\"buttons\"><a class=\"button\" href=\"%s\">Show Jobs</a> <a class=\"button\" href=\"%s/media\">Show Media</a> <a class=\"button\" href=\"%s/supplies\">Show Supplies</a></p>\n", printer->resource, printer->resource, printer->resource);
+      {
+        html_printf(client, "  <p class=\"buttons\"><a class=\"button\" href=\"%s\">Show Jobs</a> <a class=\"button\" href=\"%s/media\">Show Media</a> <a class=\"button\" href=\"%s/supplies\">Show Supplies</a>", printer->resource, printer->resource, printer->resource);
+	if (apple_client)
+	  html_printf(client, " <a class=\"button\" href=\"%s/apple.mobileconfig\">Use on iOS</a>", printer->resource);
+	html_printf(client, "</p>\n");
+      }
       html_printf(client, "</div>\n");
     }
   }
@@ -1836,8 +2085,8 @@ show_supplies(
 		num_supply;		/* Number of supplies */
   ipp_attribute_t *supply,		/* printer-supply attribute */
 		*supply_desc;		/* printer-supply-description attribute */
-  int		num_options;		/* Number of form options */
-  cups_option_t	*options;		/* Form options */
+  int		num_options = 0;	/* Number of form options */
+  cups_option_t	*options = NULL;	/* Form options */
   int		supply_len,		/* Length of supply value */
 		level;			/* Supply level */
   const char	*supply_value;		/* Supply value */
@@ -1856,23 +2105,31 @@ show_supplies(
     "index=5;class=supplyThatIsConsumed;type=toner;unit=percent;"
         "maxcapacity=100;level=%d;colorantname=yellow;"
   };
-  static const char * const colors[] =	/* Colors for the supply-level bars */
-  {
+  static const char * const backgrounds[] =
+  {					/* Background colors for the supply-level bars */
     "#777 linear-gradient(#333,#777)",
     "#000 linear-gradient(#666,#000)",
     "#0FF linear-gradient(#6FF,#0FF)",
     "#F0F linear-gradient(#F6F,#F0F)",
     "#CC0 linear-gradient(#EE6,#EE0)"
   };
+  static const char * const colors[] =	/* Text colors for the supply-level bars */
+  {
+    "#fff",
+    "#fff",
+    "#000",
+    "#000",
+    "#000"
+  };
 
 
   if (!serverRespondHTTP(client, HTTP_STATUS_OK, encoding, "text/html", 0))
     return (0);
 
-  html_header(client, printer->name);
+  html_header(client, printer->name, 0);
 
   html_printf(client, "<p class=\"buttons\"><a class=\"button\" href=\"/\">Show Printers</a> <a class=\"button\" href=\"%s\">Show Jobs</a> <a class=\"button\" href=\"%s/media\">Show Media</a></p>\n", printer->resource, printer->resource);
-  html_printf(client, "<h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s Media</h1>\n", printer->resource, printer->dnssd_name);
+  html_printf(client, "<h1><img align=\"left\" src=\"%s/icon.png\" width=\"64\" height=\"64\">%s Supplies</h1>\n", printer->resource, printer->dns_sd_name);
 
   if ((supply = ippFindAttribute(printer->pinfo.attrs, "printer-supply", IPP_TAG_STRING)) == NULL)
   {
@@ -1897,7 +2154,10 @@ show_supplies(
     return (1);
   }
 
-  if ((num_options = parse_options(client, &options)) > 0)
+  if (printer->pinfo.web_forms)
+    num_options = parse_options(client, &options);
+
+  if (num_options > 0)
   {
    /*
     * WARNING: A real printer/server implementation MUST NOT implement
@@ -1948,11 +2208,10 @@ show_supplies(
     }
 
     _cupsRWUnlock(&printer->rwlock);
-
-    html_printf(client, "<blockquote>Supplies updated.</blockquote>\n");
   }
 
-  html_printf(client, "<form method=\"GET\" action=\"%s/supplies\">\n", printer->resource);
+  if (printer->pinfo.web_forms)
+    html_printf(client, "<form method=\"GET\" action=\"%s/supplies\">\n", printer->resource);
 
   html_printf(client, "<table class=\"form\" summary=\"Supplies\">\n");
   for (i = 0; i < num_supply; i ++)
@@ -1969,9 +2228,36 @@ show_supplies(
     else
       level = 50;
 
-    html_printf(client, "<tr><th>%s:</th><td><input name=\"supply%d\" size=\"3\" value=\"%d\"><span class=\"bar\" style=\"background: %s; width: %dpx;\"></span></td></tr>\n", ippGetString(supply_desc, i, NULL), i, level, colors[i], level * 2);
+    if (printer->pinfo.web_forms)
+      html_printf(client, "<tr><th>%s:</th><td><input name=\"supply%d\" size=\"3\" value=\"%d\"></td>", ippGetString(supply_desc, i, NULL), i, level);
+    else
+      html_printf(client, "<tr><th>%s:</th>", ippGetString(supply_desc, i, NULL));
+
+    if (level < 10)
+      html_printf(client, "<td class=\"meter\"><span class=\"bar\" style=\"background: %s; padding: 5px %dpx;\"></span>&nbsp;%d%%</td></tr>\n", backgrounds[i], level * 2, level);
+    else
+      html_printf(client, "<td class=\"meter\"><span class=\"bar\" style=\"background: %s; color: %s; padding: 5px %dpx;\">%d%%</span></td></tr>\n", backgrounds[i], colors[i], level * 2, level);
   }
-  html_printf(client, "<tr><td></td><td><input type=\"submit\" value=\"Update Supplies\"></td></tr>\n</table>\n</form>\n");
+
+  if (printer->pinfo.web_forms)
+  {
+    html_printf(client, "<tr><td></td><td colspan=\"2\"><input type=\"submit\" value=\"Update Supplies\">");
+    if (num_options > 0)
+      html_printf(client, " <span class=\"badge\" id=\"status\">Supplies updated.</span>\n");
+    html_printf(client, "</td></tr>\n</table>\n</form>\n");
+
+    if (num_options > 0)
+      html_printf(client, "<script>\n"
+			  "setTimeout(hide_status, 3000);\n"
+			  "function hide_status() {\n"
+			  "  var status = document.getElementById('status');\n"
+			  "  status.style.display = 'none';\n"
+			  "}\n"
+			  "</script>\n");
+  }
+  else
+    html_printf(client, "</table>\n");
+
   html_footer(client);
 
   return (1);

@@ -1,7 +1,7 @@
 /*
  * Hashing function for CUPS.
  *
- * Copyright © 2015-2018 by Apple Inc.
+ * Copyright © 2015-2019 by Apple Inc.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
  * information.
@@ -16,6 +16,7 @@
 #  include <CommonCrypto/CommonDigest.h>
 #elif defined(HAVE_GNUTLS)
 #  include <gnutls/crypto.h>
+#  include "md5-internal.h"
 #else
 #  include "md5-internal.h"
 #endif /* __APPLE__ */
@@ -185,8 +186,24 @@ cupsHashData(const char    *algorithm,	/* I - Algorithm name */
   unsigned char	temp[64];		/* Temporary hash buffer */
   size_t	tempsize = 0;		/* Truncate to this size? */
 
+
   if (!strcmp(algorithm, "md5"))
-    alg = GNUTLS_DIG_MD5;
+  {
+   /*
+    * Some versions of GNU TLS disable MD5 without warning...
+    */
+
+    _cups_md5_state_t	state;		/* MD5 state info */
+
+    if (hashsize < 16)
+      goto too_small;
+
+    _cupsMD5Init(&state);
+    _cupsMD5Append(&state, data, datalen);
+    _cupsMD5Finish(&state, hash);
+
+    return (16);
+  }
   else if (!strcmp(algorithm, "sha"))
     alg = GNUTLS_DIG_SHA1;
   else if (!strcmp(algorithm, "sha2-224"))
@@ -230,7 +247,7 @@ cupsHashData(const char    *algorithm,	/* I - Algorithm name */
 
     gnutls_hash_fast(alg, data, datalen, hash);
 
-    return (gnutls_hash_get_len(alg));
+    return ((ssize_t)gnutls_hash_get_len(alg));
   }
 
 #else
@@ -241,6 +258,9 @@ cupsHashData(const char    *algorithm,	/* I - Algorithm name */
   if (!strcmp(algorithm, "md5"))
   {
     _cups_md5_state_t	state;		/* MD5 state info */
+
+    if (hashsize < 16)
+      goto too_small;
 
     _cupsMD5Init(&state);
     _cupsMD5Append(&state, data, datalen);

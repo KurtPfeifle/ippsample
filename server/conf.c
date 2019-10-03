@@ -1,7 +1,7 @@
 /*
  * Configuration file support for sample IPP server implementation.
  *
- * Copyright © 2015-2018 by the IEEE-ISTO Printer Working Group
+ * Copyright © 2015-2019 by the IEEE-ISTO Printer Working Group
  * Copyright © 2015-2018 by Apple Inc.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
@@ -13,6 +13,7 @@
 #include <cups/dir.h>
 #ifndef _WIN32
 #  include <fnmatch.h>
+#  include <pwd.h>
 #  include <grp.h>
 #endif /* !_WIN32 */
 #include <cups/ipp-private.h>
@@ -35,6 +36,7 @@ static void		add_subscription_privacy(void);
 static int		attr_cb(_ipp_file_t *f, server_pinfo_t *pinfo, const char *attr);
 static int		compare_lang(server_lang_t *a, server_lang_t *b);
 static int		compare_printers(server_printer_t *a, server_printer_t *b);
+static server_icc_t	*copy_icc(server_icc_t *a);
 static server_lang_t	*copy_lang(server_lang_t *a);
 static void		create_system_attributes(void);
 #ifdef HAVE_AVAHI
@@ -43,8 +45,14 @@ static void		dnssd_client_cb(AvahiClient *c, AvahiClientState state, void *userd
 static void		dnssd_init(void);
 static int		error_cb(_ipp_file_t *f, server_pinfo_t *pinfo, const char *error);
 static int		finalize_system(void);
+static void		free_icc(server_icc_t *a);
 static void		free_lang(server_lang_t *a);
 static int		load_system(const char *conf);
+static ipp_t		*parse_collection(_ipp_file_t *f, _ipp_vars_t *v, void *user_data);
+static int		parse_value(_ipp_file_t *f, _ipp_vars_t *v, void *user_data, ipp_t *ipp, ipp_attribute_t **attr, int element);
+static void		print_escaped_string(cups_file_t *fp, const char *s, size_t len);
+static void		print_ipp_attr(cups_file_t *fp, ipp_attribute_t *attr, int indent);
+static void		save_printer(server_printer_t *printer, const char *directory);
 static int		token_cb(_ipp_file_t *f, _ipp_vars_t *vars, server_pinfo_t *pinfo, const char *token);
 
 
@@ -64,6 +72,33 @@ serverAddPrinter(
   cupsArrayAdd(Printers, printer);
 
   _cupsRWUnlock(&SystemRWLock);
+}
+
+
+/*
+ * 'serverAddStringsFile()' - Add a strings file to a printer.
+ */
+
+void
+serverAddStringsFile(
+    server_printer_t  *printer,		/* I - Printer */
+    const char        *language,	/* I - Language */
+    server_resource_t *resource)	/* I - Strings resource file */
+{
+  server_lang_t	lang;			/* New localization */
+
+  lang.lang     = (char *)language;
+  lang.resource = resource;
+
+  _cupsRWLockWrite(&printer->rwlock);
+
+  if (!printer->pinfo.strings)
+    printer->pinfo.strings = cupsArrayNew3((cups_array_func_t)compare_lang, NULL, NULL, 0, (cups_acopy_func_t)copy_lang, (cups_afree_func_t)free_lang);
+
+  if (!cupsArrayFind(printer->pinfo.strings, &lang))
+    cupsArrayAdd(printer->pinfo.strings, &lang);
+
+  _cupsRWUnlock(&printer->rwlock);
 }
 
 
@@ -99,7 +134,8 @@ serverCreateSystem(
 {
   cups_dir_t	*dir;			/* Directory pointer */
   cups_dentry_t	*dent;			/* Directory entry */
-  char		filename[1024],		/* Configuration file/directory */
+  char		confdir[1024],		/* Configuration directory */
+  		filename[1024],		/* Configuration file */
                 iconname[1024],		/* Icon file */
 		resource[1024],		/* Resource path */
                 *ptr;			/* Pointer into filename */
@@ -133,14 +169,30 @@ serverCreateSystem(
   * Then see if there are any print queues...
   */
 
-  snprintf(filename, sizeof(filename), "%s/print", directory);
-  if ((dir = cupsDirOpen(filename)) != NULL)
+  if (StateDirectory)
+  {
+   /*
+    * See if we have saved printer state information...
+    */
+
+    snprintf(confdir, sizeof(confdir), "%s/print", StateDirectory);
+
+    if (access(confdir, 0))
+      snprintf(confdir, sizeof(confdir), "%s/print", directory);
+  }
+  else
+    snprintf(confdir, sizeof(confdir), "%s/print", directory);
+
+  if ((dir = cupsDirOpen(confdir)) != NULL)
   {
     serverLog(SERVER_LOGLEVEL_INFO, "Loading printers from \"%s\".", filename);
 
     while ((dent = cupsDirRead(dir)) != NULL)
     {
-      if ((ptr = dent->filename + strlen(dent->filename) - 5) >= dent->filename && !strcmp(ptr, ".conf"))
+      if ((ptr = strrchr(dent->filename, '.')) == NULL)
+        ptr = "";
+
+      if (!strcmp(ptr, ".conf"))
       {
        /*
         * Load the conf file, with any associated icon image.
@@ -148,31 +200,45 @@ serverCreateSystem(
 
         serverLog(SERVER_LOGLEVEL_INFO, "Loading printer from \"%s\".", dent->filename);
 
-        snprintf(filename, sizeof(filename), "%s/print/%s", directory, dent->filename);
+        snprintf(filename, sizeof(filename), "%s/%s", confdir, dent->filename);
         *ptr = '\0';
 
         memset(&pinfo, 0, sizeof(pinfo));
-        pinfo.print_group = SERVER_GROUP_NONE;
-	pinfo.proxy_group = SERVER_GROUP_NONE;
 
-        snprintf(iconname, sizeof(iconname), "%s/print/%s.png", directory, dent->filename);
+        pinfo.print_group       = SERVER_GROUP_NONE;
+	pinfo.proxy_group       = SERVER_GROUP_NONE;
+	pinfo.initial_accepting = 1;
+	pinfo.initial_state     = IPP_PSTATE_IDLE;
+	pinfo.initial_reasons   = SERVER_PREASON_NONE;
+        pinfo.web_forms         = 1;
+
+        snprintf(iconname, sizeof(iconname), "%s/%s.png", confdir, dent->filename);
         if (!access(iconname, R_OK))
+        {
           pinfo.icon = strdup(iconname);
+	}
+	else if (StateDirectory)
+	{
+	  snprintf(iconname, sizeof(iconname), "%s/print/%s.png", directory, dent->filename);
+	  if (!access(iconname, R_OK))
+	    pinfo.icon = strdup(iconname);
+	}
 
         if (serverLoadAttributes(filename, &pinfo))
 	{
           snprintf(resource, sizeof(resource), "/ipp/print/%s", dent->filename);
 
-	  if ((printer = serverCreatePrinter(resource, dent->filename, &pinfo, 0)) == NULL)
+	  if ((printer = serverCreatePrinter(resource, dent->filename, dent->filename, &pinfo, 0)) == NULL)
             continue;
 
-          printer->state        = IPP_PSTATE_IDLE;
-          printer->is_accepting = 1;
+          printer->state         = pinfo.initial_state;
+          printer->state_reasons = pinfo.initial_reasons;
+          printer->is_accepting  = pinfo.initial_accepting;
 
           serverAddPrinter(printer);
 	}
       }
-      else if (!strstr(dent->filename, ".png"))
+      else if (strcmp(ptr, ".png") && strcmp(ptr, ".strings"))
         serverLog(SERVER_LOGLEVEL_INFO, "Skipping \"%s\".", dent->filename);
     }
 
@@ -183,14 +249,30 @@ serverCreateSystem(
   * Finally, see if there are any 3D print queues...
   */
 
-  snprintf(filename, sizeof(filename), "%s/print3d", directory);
-  if ((dir = cupsDirOpen(filename)) != NULL)
+  if (StateDirectory)
+  {
+   /*
+    * See if we have saved printer state information...
+    */
+
+    snprintf(confdir, sizeof(confdir), "%s/print3d", StateDirectory);
+
+    if (access(confdir, 0))
+      snprintf(confdir, sizeof(confdir), "%s/print3d", directory);
+  }
+  else
+    snprintf(confdir, sizeof(confdir), "%s/print3d", directory);
+
+  if ((dir = cupsDirOpen(confdir)) != NULL)
   {
     serverLog(SERVER_LOGLEVEL_INFO, "Loading 3D printers from \"%s\".", filename);
 
     while ((dent = cupsDirRead(dir)) != NULL)
     {
-      if ((ptr = dent->filename + strlen(dent->filename) - 5) >= dent->filename && !strcmp(ptr, ".conf"))
+      if ((ptr = strrchr(dent->filename, '.')) == NULL)
+        ptr = "";
+
+      if (!strcmp(ptr, ".conf"))
       {
        /*
         * Load the conf file, with any associated icon image.
@@ -198,31 +280,45 @@ serverCreateSystem(
 
         serverLog(SERVER_LOGLEVEL_INFO, "Loading 3D printer from \"%s\".", dent->filename);
 
-        snprintf(filename, sizeof(filename), "%s/print3d/%s", directory, dent->filename);
+        snprintf(filename, sizeof(filename), "%s/%s", confdir, dent->filename);
         *ptr = '\0';
 
         memset(&pinfo, 0, sizeof(pinfo));
-        pinfo.print_group = SERVER_GROUP_NONE;
-	pinfo.proxy_group = SERVER_GROUP_NONE;
 
-        snprintf(iconname, sizeof(iconname), "%s/print3d/%s.png", directory, dent->filename);
+        pinfo.print_group       = SERVER_GROUP_NONE;
+	pinfo.proxy_group       = SERVER_GROUP_NONE;
+	pinfo.initial_accepting = 1;
+	pinfo.initial_state     = IPP_PSTATE_IDLE;
+	pinfo.initial_reasons   = SERVER_PREASON_NONE;
+        pinfo.web_forms         = 1;
+
+        snprintf(iconname, sizeof(iconname), "%s/%s.png", confdir, dent->filename);
         if (!access(iconname, R_OK))
+        {
           pinfo.icon = strdup(iconname);
+	}
+	else if (StateDirectory)
+	{
+	  snprintf(iconname, sizeof(iconname), "%s/print3d/%s.png", directory, dent->filename);
+	  if (!access(iconname, R_OK))
+	    pinfo.icon = strdup(iconname);
+	}
 
         if (serverLoadAttributes(filename, &pinfo))
 	{
           snprintf(resource, sizeof(resource), "/ipp/print3d/%s", dent->filename);
 
-	  if ((printer = serverCreatePrinter(resource, dent->filename, &pinfo, 0)) == NULL)
+	  if ((printer = serverCreatePrinter(resource, dent->filename, dent->filename, &pinfo, 0)) == NULL)
           continue;
 
-	  if (!Printers)
-	    Printers = cupsArrayNew((cups_array_func_t)compare_printers, NULL);
+          printer->state         = pinfo.initial_state;
+          printer->state_reasons = pinfo.initial_reasons;
+          printer->is_accepting  = pinfo.initial_accepting;
 
-	  cupsArrayAdd(Printers, printer);
+          serverAddPrinter(printer);
 	}
       }
-      else if (!strstr(dent->filename, ".png"))
+      else if (strcmp(ptr, ".png") && strcmp(ptr, ".strings"))
         serverLog(SERVER_LOGLEVEL_INFO, "Skipping \"%s\".", dent->filename);
     }
 
@@ -336,6 +432,41 @@ serverLoadAttributes(
   _ippVarsDeinit(&vars);
 
   return (pinfo->attrs != NULL);
+}
+
+
+/*
+ * 'serverSaveSystem()' - Save the state of the system.
+ */
+
+void
+serverSaveSystem(void)
+{
+  server_printer_t	*printer;	/* Current printer */
+  char			filename[1024];	/* Output file/directory */
+
+
+  if (!StateDirectory)
+    return;
+
+  serverLog(SERVER_LOGLEVEL_INFO, "Saving system state to \"%s\".", StateDirectory);
+
+  _cupsRWLockRead(&PrintersRWLock);
+
+  for (printer = (server_printer_t *)cupsArrayFirst(Printers); printer; printer = (server_printer_t *)cupsArrayNext(Printers))
+  {
+    if (!strncmp(printer->resource, "/ipp/print/", 11))
+      snprintf(filename, sizeof(filename), "%s/print", StateDirectory);
+    else
+      snprintf(filename, sizeof(filename), "%s/print3d", StateDirectory);
+
+    if (access(filename, 0))
+      mkdir(filename, 0777);
+
+    save_printer(printer, filename);
+  }
+
+  _cupsRWUnlock(&PrintersRWLock);
 }
 
 
@@ -956,7 +1087,24 @@ attr_cb(_ipp_file_t    *f,		/* I - IPP file */
     "device-service-count",
     "device-uuid",
     "document-format-varying-attributes",
+    "generated-natural-language-supported",
+    "ippget-event-life",
+    "job-hold-until-supported",
+    "job-hold-until-time-supported",
+    "job-ids-supported",
+    "job-k-octets-supported",
     "job-settable-attributes-supported",
+    "multiple-document-jobs-supported",
+    "multiple-operation-time-out",
+    "multiple-operation-time-out-action",
+    "natural-language-configured",
+    "notify-attributes-supported",
+    "notify-events-default",
+    "notify-events-supported",
+    "notify-lease-duration-default",
+    "notify-lease-duration-supported",
+    "notify-max-events-supported",
+    "notify-pull-method-supported",
     "operations-supported",
     "printer-alert",
     "printer-alert-description",
@@ -992,8 +1140,10 @@ attr_cb(_ipp_file_t    *f,		/* I - IPP file */
     "printer-uri-supported",
     "printer-xri-supported",
     "queued-job-count",
+    "reference-uri-scheme-supported",
     "uri-authentication-supported",
     "uri-security-supported",
+    "which-jobs-supported",
     "xri-authentication-supported",
     "xri-security-supported",
     "xri-uri-scheme-supported"
@@ -1038,6 +1188,26 @@ compare_printers(server_printer_t *a,	/* I - First printer */
 
 
 /*
+ * 'copy_icc()' - Copy an ICC profile.
+ */
+
+static server_icc_t *			/* O - New ICC profile */
+copy_icc(server_icc_t *a)		/* I - ICC profile to copy */
+{
+  server_icc_t	*b;			/* New ICC profile */
+
+
+  if ((b = calloc(1, sizeof(server_icc_t))) != NULL)
+  {
+    b->attrs    = a->attrs;
+    b->resource = a->resource;
+  }
+
+  return (b);
+}
+
+
+/*
  * 'copy_lang()' - Copy a localization.
  */
 
@@ -1050,7 +1220,7 @@ copy_lang(server_lang_t *a)		/* I - Localization to copy */
   if ((b = calloc(1, sizeof(server_lang_t))) != NULL)
   {
     b->lang     = strdup(a->lang);
-    b->filename = strdup(a->filename);
+    b->resource = a->resource;
   }
 
   return (b);
@@ -1155,61 +1325,220 @@ create_system_attributes(void)
     IPP_OP_SHUTDOWN_ALL_PRINTERS,
     IPP_OP_STARTUP_ALL_PRINTERS
   };
-  static const char * const device_command_supported[] =
-  {					/* Values for device-command-supported */
-    /* TODO: Scan BinDir for commands? Or make this configurable? */
-    "ippdoclint",
-    "ipptransform",
-    "ipptransform3d"
-  };
-  static const char * const device_format_supported[] =
-  {					/* Values for device-format-supported */
-    "application/pdf",
-    "application/postscript",
-    "application/vnd.hp-pcl",
-    "application/vnd.pwg-safe-gcode",
-    "image/pwg-raster",
-    "image/urf",
-    "model/3mf",
-    "model/3mf+slice",
-    "text/plain"
-  };
-  static const char * const device_uri_schemes_supported[] =
-  {					/* Values for device-uri-schemes-supported */
-    "ipp",
-    "ipps",
-    "socket",
-    "usbserial"
-  };
   static const char * const printer_creation_attributes_supported[] =
   {					/* Values for printer-creation-attributes-supported */
-    "auth-print-group",
-    "auth-proxy-group",
+    "chamber-humidity-default",
+    "chamber-humidity-supported",
+    "chamber-temperature-default",
+    "chamber-temperature-su[pported",
+    "coating-sides-supported",
+    "coating-type-supported",
     "color-supported",
-    "device-command",
-    "device-format",
-    "device-name",
-    "device-uri",
+    "copies-default",
+    "copies-supported",
+    "cover-back-default",
+    "cover-back-supported",
+    "cover-front-default",
+    "cover-front-supported",
+    "covering-name-supported",
+    "document-creation-attributes-supported",
     "document-format-default",
     "document-format-supported",
+    "finishing-template-supported",
+    "finishings-default",
+    "finishings-ready",
+    "finishings-supported",
+    "finishings-col-database",
+    "finishings-col-default",
+    "finishings-col-ready",
+    "finishings-col-supported",
+    "folding-direction-supported",
+    "folding-offset-supported",
+    "folding-reference-edge-supported",
+    "imposition-template-default",
+    "imposition-template-supported",
+    "insert-sheet-default",
+    "inseet-sheet-supported",
+    "job-account-id-default",
+    "job-account-id-supported",
+    "job-account-type-default",
+    "job-account-type-supported",
+    "job-accounting-sheets-default",
+    "job-accounting-sheets-supported",
+    "job-accounting-user-id-default",
+    "job-accounting-user-id-supported",
+    "job-authorization-uri-supported",
+    "job-constraints-supported",
+    "job-creation-attributes-supported",
+    "job-delay-output-until-default",
+    "job-error-action-default",
+    "job-error-action-supported",
+    "job-error-sheet-default",
+    "job-error-sheet-supported",
+    "job-hold-until-default",
+    "job-message-to-operator-default",
+    "job-pages-per-set-supported",
+    "job-password-encryption-supported",
+    "job-password-length-supported",
+    "job-password-repertoire-configured",
+    "job-password-repertoire-supported",
+    "job-password-supported",
+    "job-phone-number-default",
+    "job-phone-number-supported",
+    "job-presets-supported",
+    "job-priority-default",
+    "job-recipient-name-default",
+    "job-recipient-name-supported",
+    "job-resolvers-supported",
+    "job-retain-until-default",
+    "job-sheet-message-default",
+    "job-sheet-message-supported",
+    "job-sheets-col-default",
+    "job-sheets-col-supported",
+    "job-sheets-default",
+    "job-sheets-supported",
+    "job-triggers-supported",
+    "laminating-sides-supported",
+    "laminating-type-supported",
+    "material-amount-units-supported",
+    "material-diameter-supported",
+    "material-nozzle-diameter-supported",
+    "material-purpose-supported",
+    "material-rate-supported",
+    "material-rate-units-supported",
+    "material-shell-thickness-supported",
+    "material-temperature-supported",
+    "material-type-supported",
+    "materials-col-database",
+    "materials-col-default",
+    "materials-col-ready",
+    "materials-col-supported",
+    "max-materials-col-supported",
+    "max-stitching-locations-supported",
+    "media-bottom-margin-supported",
+    "media-col-database",
+    "media-col-default",
+    "media-col-ready",
+    "media-color-supported",
+    "media-default",
+    "media-key-supported",
+    "media-ready",
+    "media-supported",
+    "media-left-margin-supported",
+    "media-right-margin-supported",
+    "media-size-supported",
+    "media-source-supported",
+    "media-top-margin-supported",
+    "media-type-supported",
+    "multiple-document-handling-default",
     "multiple-document-jobs-supported",
-    "natural-language-configured",
+    "multiple-object-handling-default",
+    "multiple-operation-time-out-action",
+    "natural-languauge-configured",
+    "notify-events-default",
+    "number-up-default",
+    "number-up-supported",
+    "orientation-requested-default",
+    "orientation-requested-supported",
+    "output-bin-default",
+    "output-bin-supported",
+    "overrides-supported",
+    "page-delivery-default",
+    "page-delivery-supported",
+    "page-ranges-supported",
     "pages-per-minute",
     "pages-per-minute-color",
     "pdl-override-supported",
+    "platform-shape",
+    "platform-temperature-default",
+    "platform-temperature-supported",
+    "presentation-direction-number-up-default",
+    "presentation-direction-number-up-supported",
+    "print-accuracy-default",
+    "print-accuracy-supported",
+    "print-base-default",
+    "print-base-supported",
+    "print-color-mode-default",
+    "print-color-mode-supported",
+    "print-content-optimize-default",
+    "print-content-optimize-supported",
+    "print-objects-default",
+    "print-quality-default",
+    "print-rendering-intent-default",
+    "print-rendering-intent-supported",
+    "print-scaling-default",
+    "print-scaling-supported",
+    "print-supports-default",
+    "print-supports-supported",
+    "printer-charge-info",
+    "printer-charge-info-uri",
+    "printer-contact-col",
     "printer-device-id",
+    "printer-dns-sd-name",
     "printer-geo-location",
+    "printer-icc-profiles",
     "printer-info",
+    "printer-kind",
     "printer-location",
     "printer-make-and-model",
+    "printer-mandatory-job-attributes",
     "printer-name",
+    "printer-organization",
+    "printer-organizational-unit",
+    "printer-resolution-default",
+    "printer-resolution-supported",
+    "printer-volume-supported",
+    "proof-print-default",
+    "proof-print-suppported",
+    "punching-hole-diameter-configured",
+    "punching-locations-supported",
+    "punching-offset-supported",
+    "punching-reference-edge-supported",
     "pwg-raster-document-resolution-supported",
     "pwg-raster-document-sheet-back",
     "pwg-raster-document-type-supported",
-    "urf-supported"
+    "pwg-safe-gcode-supported",
+    "separator-sheets-default",
+    "separator-sheets-supported",
+    "sides-default",
+    "sides-supported",
+    "smi2699-auth-print-group",
+    "smi2699-auth-proxy-group",
+    "smi2699-device-command",
+    "smi2699-device-format",
+    "smi2699-device-name",
+    "smi2699-device-uri",
+    "smi2699-max-output-device",
+    "stitching-angle-supported",
+    "stitching-locations-supported",
+    "stitching-method-supported",
+    "stitching-offset-supported",
+    "stitching-reference-edge-supported",
+    "trimming-offset-supported",
+    "trimming-reference-edge-supported",
+    "trimming-type-supported",
+    "trimming-when-supported",
+    "urf-supported",
+    "x-image-position-default",
+    "x-image-position-supported",
+    "x-image-shift-default",
+    "x-image-shift-supported",
+    "x-side1-image-shift-default",
+    "x-side1-image-shift-supported",
+    "x-side2-image-shift-default",
+    "x-side2-image-shift-supported",
+    "y-image-position-default",
+    "y-image-position-supported",
+    "y-image-shift-default",
+    "y-image-shift-supported",
+    "y-side1-image-shift-default",
+    "y-side1-image-shift-supported",
+    "y-side2-image-shift-default",
+    "y-side2-image-shift-supported"
   };
   static const char * const resource_format_supported[] =
   {					/* Values for resource-format-supported */
+    "application/ipp",
     "application/vnd.iccprofile",
     "image/png",
     "text/strings"
@@ -1222,7 +1551,36 @@ create_system_attributes(void)
   {					/* Values for resource-type-supported */
     "static-icc-profile",
     "static-image",
-    "static-strings"
+    "static-strings",
+    "template-document",
+    "template-job",
+    "template-printer"
+  };
+  static const char * const smi2699_device_command_supported[] =
+  {					/* Values for smi2699-device-command-supported */
+    /* TODO: Scan BinDir for commands? Or make this configurable? */
+    "ippdoclint",
+    "ipptransform",
+    "ipptransform3d"
+  };
+  static const char * const smi2699_device_format_supported[] =
+  {					/* Values for smi2699-device-format-supported */
+    "application/pdf",
+    "application/postscript",
+    "application/vnd.hp-pcl",
+    "application/vnd.pwg-safe-gcode",
+    "image/pwg-raster",
+    "image/urf",
+    "model/3mf",
+    "model/3mf+slice",
+    "text/plain"
+  };
+  static const char * const smi2699_device_uri_schemes_supported[] =
+  {					/* Values for smi2699-device-uri-schemes-supported */
+    "ipp",
+    "ipps",
+    "socket",
+    "usbserial"
   };
   static const char * const system_mandatory_printer_attributes[] =
   {					/* Values for system-mandatory-printer-attributes */
@@ -1242,51 +1600,11 @@ create_system_attributes(void)
 
   SystemAttributes = ippNew();
 
-  /* auth-group-supported */
-#ifndef _WIN32
-  alloc_groups = num_groups = 0;
-  groups       = NULL;
-
-  setgrent();
-  while ((grp = getgrent()) != NULL)
-  {
-    if (grp->gr_name[0] == '_')
-      continue;				/* Skip system groups */
-
-    if (num_groups >= alloc_groups)
-    {
-      alloc_groups += 10;
-      groups       = (char **)realloc(groups, (size_t)alloc_groups * sizeof(char *));
-    }
-
-    groups[num_groups ++] = strdup(grp->gr_name);
-  }
-  endgrent();
-
-  if (num_groups > 0)
-  {
-    ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_TAG_NAME, "auth-group-supported", num_groups, NULL, (const char **)groups);
-
-    for (i = 0; i < num_groups; i ++)
-      free(groups[i]);
-    free(groups);
-  }
-#endif /* !_WIN32 */
-
   /* charset-configured */
   ippAddString(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_CHARSET), "charset-configured", NULL, "utf-8");
 
   /* charset-supported */
   ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_CHARSET), "charset-supported", (int)(sizeof(charset_supported) / sizeof(charset_supported[0])), NULL, charset_supported);
-
-  /* device-command-supported */
-  ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_NAME), "device-command-supported", (int)(sizeof(device_command_supported) / sizeof(device_command_supported[0])), NULL, device_command_supported);
-
-  /* device-format-supported */
-  ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_MIMETYPE), "device-format-supported", (int)(sizeof(device_format_supported) / sizeof(device_format_supported[0])), NULL, device_format_supported);
-
-  /* device-uri-schemes-supported */
-  ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_URISCHEME), "device-uri-schemes-supported", (int)(sizeof(device_uri_schemes_supported) / sizeof(device_uri_schemes_supported[0])), NULL, device_uri_schemes_supported);
 
   /* document-format-supported */
   ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_MIMETYPE), "document-format-supported", (int)(sizeof(document_format_supported) / sizeof(document_format_supported[0])), NULL, document_format_supported);
@@ -1341,6 +1659,118 @@ create_system_attributes(void)
 
   /* resource-type-supported */
   ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_KEYWORD), "resource-type-supported", (int)(sizeof(resource_type_supported) / sizeof(resource_type_supported[0])), NULL, resource_type_supported);
+
+  /* smi2699-auth-group-supported */
+#ifndef _WIN32
+  alloc_groups = 10;
+  num_groups   = 0;
+  groups       = calloc(10, sizeof(char *));
+
+  if ((setting = cupsGetOption("AuthGroups", SystemNumSettings, SystemSettings)) != NULL)
+  {
+    char	*tempgroups = strdup(setting),
+					/* Temporary string to hold group names */
+		*tempptr = tempgroups,	/* Pointer into group names */
+		*tempgroup;		/* Current group name */
+
+    while ((tempgroup = strsep(&tempptr, " \t")) != NULL)
+    {
+      if (num_groups >= alloc_groups)
+      {
+	alloc_groups += 10;
+	groups       = (char **)realloc(groups, (size_t)alloc_groups * sizeof(char *));
+      }
+
+      groups[num_groups ++] = strdup(tempgroup);
+    }
+
+    free(tempgroups);
+  }
+  else if (getuid())
+  {
+   /*
+    * Default is the current user's groups (if not root).
+    */
+
+    struct passwd	*pw;		/* User account information */
+    int			ngids;		/* Number of groups for user */
+#  ifdef __APPLE__
+    int			gids[2048];	/* Group list */
+#  else
+    gid_t		gids[2048];	/* Group list */
+#  endif /* __APPLE__ */
+
+    if ((pw = getpwuid(getuid())) != NULL)
+    {
+      ngids = (int)(sizeof(gids) / sizeof(gids[0]));
+
+#  ifdef __APPLE__
+      if (!getgrouplist(pw->pw_name, (int)pw->pw_gid, gids, &ngids))
+#  else
+      if (!getgrouplist(pw->pw_name, pw->pw_gid, gids, &ngids))
+#  endif /* __APPLE__ */
+      {
+        for (i = 0; i < ngids; i ++)
+        {
+          if ((grp = getgrgid((gid_t)gids[i])) != NULL)
+          {
+	    if (grp->gr_name[0] == '_' && strncmp(grp->gr_name, "_lp", 3))
+	      continue;				/* Skip system groups */
+
+	    if (num_groups >= alloc_groups)
+	    {
+	      alloc_groups += 10;
+	      groups       = (char **)realloc(groups, (size_t)alloc_groups * sizeof(char *));
+	    }
+
+	    groups[num_groups ++] = strdup(grp->gr_name);
+          }
+        }
+      }
+    }
+  }
+
+  if (num_groups == 0)
+  {
+   /*
+    * If all else fails, use default list of groups...
+    */
+
+    static const char * const defgroups[] =
+    {
+      "adm",
+      "admin",
+      "daemon",
+      "operator",
+      "staff",
+      "wheel"
+    };
+
+    for (i = 0; i < (int)(sizeof(defgroups) / sizeof(defgroups[0])); i ++)
+    {
+      if (getgrnam(defgroups[i]))
+        groups[num_groups ++] = strdup(defgroups[i]);
+    }
+  }
+
+  if (num_groups > 0)
+  {
+    ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_TAG_NAME, "smi2699-auth-group-supported", num_groups, NULL, (const char **)groups);
+
+    for (i = 0; i < num_groups; i ++)
+      free(groups[i]);
+    free(groups);
+  }
+#endif /* !_WIN32 */
+
+  /* smi2699-device-command-supported */
+  ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_NAME), "smi2699-device-command-supported", (int)(sizeof(smi2699_device_command_supported) / sizeof(smi2699_device_command_supported[0])), NULL, smi2699_device_command_supported);
+
+  /* smi2699-device-format-supported */
+  ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_MIMETYPE), "smi2699-device-format-supported", (int)(sizeof(smi2699_device_format_supported) / sizeof(smi2699_device_format_supported[0])), NULL, smi2699_device_format_supported);
+
+  /* smi2699-device-uri-schemes-supported */
+  ippAddStrings(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_URISCHEME), "smi2699-device-uri-schemes-supported", (int)(sizeof(smi2699_device_uri_schemes_supported) / sizeof(smi2699_device_uri_schemes_supported[0])), NULL, smi2699_device_uri_schemes_supported);
 
   /* system-device-id, TODO: maybe remove this, it has no purpose */
   ippAddString(SystemAttributes, IPP_TAG_SYSTEM, IPP_CONST_TAG(IPP_TAG_TEXT), "system-device-id", NULL, "MANU:None;MODEL:None;");
@@ -1577,7 +2007,7 @@ error_cb(_ipp_file_t    *f,		/* I - IPP file data */
 static int				/* O - 1 on success, 0 on failure */
 finalize_system(void)
 {
-  char	local[1024];			/* Local hostname */
+  char		local[1024];		/* Local hostname */
 
 
  /*
@@ -1585,7 +2015,37 @@ finalize_system(void)
   */
 
   if (!BinDir)
-    BinDir = strdup(CUPS_SERVERBIN);
+  {
+    const char	*env;			/* Environment variable */
+    char	temp[1024];		/* Temporary string */
+
+    if ((env = getenv("CUPS_SERVERBIN")) != NULL)
+    {
+     /*
+      * Look for the commands in the indicated directory...
+      */
+
+      snprintf(temp, sizeof(temp), "%s/command", env);
+      BinDir = strdup(temp);
+    }
+    else if ((env = getenv("SNAP")) != NULL)
+    {
+     /*
+      * Look for the commands in the snap directory...
+      */
+
+      snprintf(temp, sizeof(temp), "%s/lib/cups/command", env);
+      BinDir = strdup(temp);
+    }
+    else
+    {
+     /*
+      * Use the compiled-in defaults...
+      */
+
+      BinDir = strdup(CUPS_SERVERBIN "/command");
+    }
+  }
 
  /*
   * Default hostname...
@@ -1656,6 +2116,8 @@ finalize_system(void)
       AuthAdminGroup = getgid();
     if (AuthOperatorGroup == SERVER_GROUP_NONE)
       AuthOperatorGroup = getgid();
+    if (AuthProxyGroup == SERVER_GROUP_NONE)
+      AuthProxyGroup = getgid();
 #endif /* !_WIN32 */
 
     if (!AuthName)
@@ -1707,10 +2169,11 @@ finalize_system(void)
   add_subscription_privacy();
 
  /*
-  * Initialize Bonjour...
+  * Initialize DNS-SD...
   */
 
-  dnssd_init();
+  if (DNSSDEnabled)
+    dnssd_init();
 
  /*
   * Apply default listeners if none are specified...
@@ -1718,33 +2181,54 @@ finalize_system(void)
 
   if (!Listeners)
   {
+    int	port = DefaultPort;		/* Current port */
+
 #ifdef _WIN32
    /*
     * Windows is almost always used as a single user system, so use a default port
     * number of 8631.
     */
 
-    if (!DefaultPort)
-      DefaultPort = 8631;
+    if (!port)
+      port = 8631;
 
 #else
    /*
     * Use 8000 + UID mod 1000 for the default port number...
     */
 
-    if (!DefaultPort)
-      DefaultPort = 8000 + ((int)getuid() % 1000);
+    if (!port)
+      port = 8000 + ((int)getuid() % 1000);
 #endif /* _WIN32 */
 
-    serverLog(SERVER_LOGLEVEL_INFO, "Using default listeners for %s:%d.", ServerName, DefaultPort);
+    while (!serverCreateListeners(strcmp(ServerName, "localhost") ? NULL : "localhost", port))
+    {
+      if (DefaultPort)
+        return (0);
 
-    if (!serverCreateListeners(strcmp(ServerName, "localhost") ? NULL : "localhost", DefaultPort))
-      return (0);
+      port ++;
+    }
+
+    DefaultPort = port;
+
+    serverLog(SERVER_LOGLEVEL_INFO, "Using default listeners for %s:%d.", ServerName, DefaultPort);
   }
 
   create_system_attributes();
 
   return (1);
+}
+
+
+/*
+ * 'free_icc()' - Free a profile.
+ */
+
+static void
+free_icc(server_icc_t *a)		/* I - Profile */
+{
+  ippDelete(a->attrs);
+  free(a);
 }
 
 
@@ -1756,7 +2240,6 @@ static void
 free_lang(server_lang_t *a)		/* I - Localization */
 {
   free(a->lang);
-  free(a->filename);
   free(a);
 }
 
@@ -1783,8 +2266,10 @@ load_system(const char *conf)		/* I - Configuration file */
   {
     "Authentication",
     "AuthAdminGroup",
+    "AuthGroups",
     "AuthName",
     "AuthOperatorGroup",
+    "AuthProxyGroup",
     "AuthService",
     "AuthTestPassword",
     "AuthType",
@@ -1813,6 +2298,7 @@ load_system(const char *conf)		/* I - Configuration file */
     "OwnerName",
     "OwnerPhone",
     "SpoolDir",
+    "StateDir",
     "SubscriptionPrivacyAttributes",
     "SubscriptionPrivacyScope",
     "UUID"
@@ -1916,6 +2402,17 @@ load_system(const char *conf)		/* I - Configuration file */
       }
 
       AuthOperatorGroup = group->gr_gid;
+    }
+    else if (!_cups_strcasecmp(line, "AuthProxyGroup"))
+    {
+      if ((group = getgrnam(value)) == NULL)
+      {
+        fprintf(stderr, "ippserver: Unable to find AuthProxyGroup \"%s\" on line %d of \"%s\".\n", value, linenum, conf);
+        status = 0;
+        break;
+      }
+
+      AuthProxyGroup = group->gr_gid;
     }
 #endif /* !_WIN32 */
     else if (!_cups_strcasecmp(line, "AuthService"))
@@ -2116,6 +2613,10 @@ load_system(const char *conf)		/* I - Configuration file */
 	  *ptr++ = '\0';
 	  port   = atoi(ptr);
 	}
+	else if (DefaultPort)
+	{
+	  port = DefaultPort;
+	}
 	else
 	{
 #ifdef _WIN32
@@ -2124,6 +2625,9 @@ load_system(const char *conf)		/* I - Configuration file */
 	  port = 8000 + ((int)getuid() % 1000);
 #endif /* _WIN32 */
 	}
+
+        if (!DefaultPort)
+          DefaultPort = port;
 
 	if (!serverCreateListeners(host, port))
 	{
@@ -2190,6 +2694,17 @@ load_system(const char *conf)		/* I - Configuration file */
 
       SpoolDirectory = strdup(value);
     }
+    else if (!_cups_strcasecmp(line, "StateDir"))
+    {
+      if (access(value, R_OK) && mkdir(value, 0700))
+      {
+        fprintf(stderr, "ippserver: Unable to access StateDirectory \"%s\": %s\n", value, strerror(errno));
+        status = 0;
+        break;
+      }
+
+      StateDirectory = strdup(value);
+    }
     else if (!_cups_strcasecmp(line, "SubscriptionPrivacyAttributes"))
     {
       if (SubscriptionPrivacyAttributes)
@@ -2217,6 +2732,657 @@ load_system(const char *conf)		/* I - Configuration file */
   cupsFileClose(fp);
 
   return (status);
+}
+
+
+/*
+ * 'iso_date()' - Return an ISO 8601 date/time string for the given IPP dateTime
+ *                value.
+ */
+
+static char *				/* O - ISO 8601 date/time string */
+iso_date(const ipp_uchar_t *date)	/* I - IPP (RFC 1903) date/time value */
+{
+  time_t	utctime;		/* UTC time since 1970 */
+  struct tm	*utcdate;		/* UTC date/time */
+  static char	buffer[255];		/* String buffer */
+
+
+  utctime = ippDateToTime(date);
+  utcdate = gmtime(&utctime);
+
+  snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ",
+	   utcdate->tm_year + 1900, utcdate->tm_mon + 1, utcdate->tm_mday,
+	   utcdate->tm_hour, utcdate->tm_min, utcdate->tm_sec);
+
+  return (buffer);
+}
+
+
+/*
+ * 'parse_collection()' - Parse an IPP collection value.
+ */
+
+static ipp_t *				/* O - Collection value or @code NULL@ on error */
+parse_collection(
+    _ipp_file_t      *f,		/* I - IPP data file */
+    _ipp_vars_t      *v,		/* I - IPP variables */
+    void             *user_data)	/* I - User data pointer */
+{
+  ipp_t		*col = ippNew();	/* Collection value */
+  ipp_attribute_t *attr = NULL;		/* Current member attribute */
+  char		token[1024];		/* Token string */
+
+
+ /*
+  * Parse the collection value...
+  */
+
+  while (_ippFileReadToken(f, token, sizeof(token)))
+  {
+    if (!_cups_strcasecmp(token, "}"))
+    {
+     /*
+      * End of collection value...
+      */
+
+      break;
+    }
+    else if (!_cups_strcasecmp(token, "MEMBER"))
+    {
+     /*
+      * Member attribute definition...
+      */
+
+      char	syntax[128],		/* Attribute syntax (value tag) */
+		name[128];		/* Attribute name */
+      ipp_tag_t	value_tag;		/* Value tag */
+
+      attr = NULL;
+
+      if (!_ippFileReadToken(f, syntax, sizeof(syntax)))
+      {
+        fprintf(stderr, "ippserver: Missing MEMBER syntax on line %d of \"%s\".\n", f->linenum, f->filename);
+	ippDelete(col);
+	col = NULL;
+	break;
+      }
+      else if ((value_tag = ippTagValue(syntax)) < IPP_TAG_UNSUPPORTED_VALUE)
+      {
+        fprintf(stderr, "ippserver: Bad MEMBER syntax \"%s\" on line %d of \"%s\".\n", syntax, f->linenum, f->filename);
+	ippDelete(col);
+	col = NULL;
+	break;
+      }
+
+      if (!_ippFileReadToken(f, name, sizeof(name)) || !name[0])
+      {
+        fprintf(stderr, "ippserver: Missing MEMBER name on line %d of \"%s\".\n", f->linenum, f->filename);
+	ippDelete(col);
+	col = NULL;
+	break;
+      }
+
+      if (value_tag < IPP_TAG_INTEGER)
+      {
+       /*
+	* Add out-of-band attribute - no value string needed...
+	*/
+
+        ippAddOutOfBand(col, IPP_TAG_ZERO, value_tag, name);
+      }
+      else
+      {
+       /*
+        * Add attribute with one or more values...
+        */
+
+        attr = ippAddString(col, IPP_TAG_ZERO, value_tag, name, NULL, NULL);
+
+        if (!parse_value(f, v, user_data, col, &attr, 0))
+        {
+	  ippDelete(col);
+	  col = NULL;
+          break;
+	}
+      }
+
+    }
+    else if (attr && !_cups_strcasecmp(token, ","))
+    {
+     /*
+      * Additional value...
+      */
+
+      if (!parse_value(f, v, user_data, col, &attr, ippGetCount(attr)))
+      {
+	ippDelete(col);
+	col = NULL;
+	break;
+      }
+    }
+    else
+    {
+     /*
+      * Something else...
+      */
+
+      fprintf(stderr, "ippserver: Unknown directive \"%s\" on line %d of \"%s\".\n", token, f->linenum, f->filename);
+      ippDelete(col);
+      col  = NULL;
+      attr = NULL;
+      break;
+    }
+  }
+
+  return (col);
+}
+
+
+/*
+ * 'parse_value()' - Parse an IPP value.
+ */
+
+static int				/* O  - 1 on success or 0 on error */
+parse_value(_ipp_file_t      *f,	/* I  - IPP data file */
+            _ipp_vars_t      *v,	/* I  - IPP variables */
+            void             *user_data,/* I  - User data pointer */
+            ipp_t            *ipp,	/* I  - IPP message */
+            ipp_attribute_t  **attr,	/* IO - IPP attribute */
+            int              element)	/* I  - Element number */
+{
+  char		value[2049],		/* Value string */
+		*valueptr,		/* Pointer into value string */
+		temp[2049],		/* Temporary string */
+		*tempptr;		/* Pointer into temporary string */
+  size_t	valuelen;		/* Length of value */
+
+
+  if (!_ippFileReadToken(f, temp, sizeof(temp)))
+  {
+    fprintf(stderr, "ippserver: Missing value on line %d of \"%s\".\n", f->linenum, f->filename);
+    return (0);
+  }
+
+  _ippVarsExpand(v, value, temp, sizeof(value));
+
+  switch (ippGetValueTag(*attr))
+  {
+    case IPP_TAG_BOOLEAN :
+        return (ippSetBoolean(ipp, attr, element, !_cups_strcasecmp(value, "true")));
+        break;
+
+    case IPP_TAG_ENUM :
+    case IPP_TAG_INTEGER :
+        return (ippSetInteger(ipp, attr, element, (int)strtol(value, NULL, 0)));
+        break;
+
+    case IPP_TAG_DATE :
+        {
+          int	year,			/* Year */
+		month,			/* Month */
+		day,			/* Day of month */
+		hour,			/* Hour */
+		minute,			/* Minute */
+		second,			/* Second */
+		utc_offset = 0;		/* Timezone offset from UTC */
+          ipp_uchar_t date[11];		/* dateTime value */
+
+          if (*value == 'P')
+          {
+           /*
+            * Time period...
+            */
+
+            time_t	curtime;	/* Current time in seconds */
+            int		period = 0,	/* Current period value */
+			saw_T = 0;	/* Saw time separator */
+
+            curtime = time(NULL);
+
+            for (valueptr = value + 1; *valueptr; valueptr ++)
+            {
+              if (isdigit(*valueptr & 255))
+              {
+                period = (int)strtol(valueptr, &valueptr, 10);
+
+                if (!valueptr || period < 0)
+                {
+		  fprintf(stderr, "ippserver: Bad dateTime value \"%s\" on line %d of \"%s\".\n", value, f->linenum, f->filename);
+		  return (0);
+		}
+              }
+
+              if (*valueptr == 'Y')
+              {
+                curtime += 365 * 86400 * period;
+                period  = 0;
+              }
+              else if (*valueptr == 'M')
+              {
+                if (saw_T)
+                  curtime += 60 * period;
+                else
+                  curtime += 30 * 86400 * period;
+
+                period = 0;
+              }
+              else if (*valueptr == 'D')
+              {
+                curtime += 86400 * period;
+                period  = 0;
+              }
+              else if (*valueptr == 'H')
+              {
+                curtime += 3600 * period;
+                period  = 0;
+              }
+              else if (*valueptr == 'S')
+              {
+                curtime += period;
+                period = 0;
+              }
+              else if (*valueptr == 'T')
+              {
+                saw_T  = 1;
+                period = 0;
+              }
+              else
+	      {
+		fprintf(stderr, "ippserver: Bad dateTime value \"%s\" on line %d of \"%s\".\n", value, f->linenum, f->filename);
+		return (0);
+	      }
+	    }
+
+	    return (ippSetDate(ipp, attr, element, ippTimeToDate(curtime)));
+          }
+          else if (sscanf(value, "%d-%d-%dT%d:%d:%d%d", &year, &month, &day, &hour, &minute, &second, &utc_offset) < 6)
+          {
+           /*
+            * Date/time value did not parse...
+            */
+
+	    fprintf(stderr, "ippserver: Bad dateTime value \"%s\" on line %d of \"%s\".\n", value, f->linenum, f->filename);
+	    return (0);
+          }
+
+          date[0] = (ipp_uchar_t)(year >> 8);
+          date[1] = (ipp_uchar_t)(year & 255);
+          date[2] = (ipp_uchar_t)month;
+          date[3] = (ipp_uchar_t)day;
+          date[4] = (ipp_uchar_t)hour;
+          date[5] = (ipp_uchar_t)minute;
+          date[6] = (ipp_uchar_t)second;
+          date[7] = 0;
+          if (utc_offset < 0)
+          {
+            utc_offset = -utc_offset;
+            date[8]    = (ipp_uchar_t)'-';
+	  }
+	  else
+	  {
+            date[8] = (ipp_uchar_t)'+';
+	  }
+
+          date[9]  = (ipp_uchar_t)(utc_offset / 100);
+          date[10] = (ipp_uchar_t)(utc_offset % 100);
+
+          return (ippSetDate(ipp, attr, element, date));
+        }
+        break;
+
+    case IPP_TAG_RESOLUTION :
+	{
+	  int	xres,		/* X resolution */
+		yres;		/* Y resolution */
+	  char	*ptr;		/* Pointer into value */
+
+	  xres = yres = (int)strtol(value, (char **)&ptr, 10);
+	  if (ptr > value && xres > 0)
+	  {
+	    if (*ptr == 'x')
+	      yres = (int)strtol(ptr + 1, (char **)&ptr, 10);
+	  }
+
+	  if (ptr <= value || xres <= 0 || yres <= 0 || !ptr || (_cups_strcasecmp(ptr, "dpi") && _cups_strcasecmp(ptr, "dpc") && _cups_strcasecmp(ptr, "dpcm") && _cups_strcasecmp(ptr, "other")))
+	  {
+	    fprintf(stderr, "ippserver: Bad resolution value \"%s\" on line %d of \"%s\".\n", value, f->linenum, f->filename);
+	    return (0);
+	  }
+
+	  if (!_cups_strcasecmp(ptr, "dpi"))
+	    return (ippSetResolution(ipp, attr, element, IPP_RES_PER_INCH, xres, yres));
+	  else if (!_cups_strcasecmp(ptr, "dpc") || !_cups_strcasecmp(ptr, "dpcm"))
+	    return (ippSetResolution(ipp, attr, element, IPP_RES_PER_CM, xres, yres));
+	  else
+	    return (ippSetResolution(ipp, attr, element, (ipp_res_t)0, xres, yres));
+	}
+	break;
+
+    case IPP_TAG_RANGE :
+	{
+	  int	lower,			/* Lower value */
+		upper;			/* Upper value */
+
+          if (sscanf(value, "%d-%d", &lower, &upper) != 2)
+          {
+	    fprintf(stderr, "ippserver: Bad rangeOfInteger value \"%s\" on line %d of \"%s\".\n", value, f->linenum, f->filename);
+	    return (0);
+	  }
+
+	  return (ippSetRange(ipp, attr, element, lower, upper));
+	}
+	break;
+
+    case IPP_TAG_STRING :
+        valuelen = strlen(value);
+
+        if (value[0] == '<' && value[strlen(value) - 1] == '>')
+        {
+          if (valuelen & 1)
+          {
+	    fprintf(stderr, "ippserver: Bad octetString value on line %d of \"%s\".\n", f->linenum, f->filename);
+	    return (0);
+          }
+
+          valueptr = value + 1;
+          tempptr  = temp;
+
+          while (*valueptr && *valueptr != '>')
+          {
+	    if (!isxdigit(valueptr[0] & 255) || !isxdigit(valueptr[1] & 255))
+	    {
+	      fprintf(stderr, "ippserver: Bad octetString value on line %d of \"%s\".\n", f->linenum, f->filename);
+	      return (0);
+	    }
+
+            if (valueptr[0] >= '0' && valueptr[0] <= '9')
+              *tempptr = (char)((valueptr[0] - '0') << 4);
+	    else
+              *tempptr = (char)((tolower(valueptr[0]) - 'a' + 10) << 4);
+
+            if (valueptr[1] >= '0' && valueptr[1] <= '9')
+              *tempptr |= (valueptr[1] - '0');
+	    else
+              *tempptr |= (tolower(valueptr[1]) - 'a' + 10);
+
+            tempptr ++;
+          }
+
+          return (ippSetOctetString(ipp, attr, element, temp, (int)(tempptr - temp)));
+        }
+        else
+          return (ippSetOctetString(ipp, attr, element, value, (int)valuelen));
+        break;
+
+    case IPP_TAG_TEXTLANG :
+    case IPP_TAG_NAMELANG :
+    case IPP_TAG_TEXT :
+    case IPP_TAG_NAME :
+    case IPP_TAG_KEYWORD :
+    case IPP_TAG_URI :
+    case IPP_TAG_URISCHEME :
+    case IPP_TAG_CHARSET :
+    case IPP_TAG_LANGUAGE :
+    case IPP_TAG_MIMETYPE :
+        return (ippSetString(ipp, attr, element, value));
+        break;
+
+    case IPP_TAG_BEGIN_COLLECTION :
+        {
+          int	status;			/* Add status */
+          ipp_t *col;			/* Collection value */
+
+          if (strcmp(value, "{"))
+          {
+	    fprintf(stderr, "ippserver: Bad collection value on line %d of \"%s\".\n", f->linenum, f->filename);
+	    return (0);
+          }
+
+          if ((col = parse_collection(f, v, user_data)) == NULL)
+            return (0);
+
+	  status = ippSetCollection(ipp, attr, element, col);
+	  ippDelete(col);
+
+	  return (status);
+	}
+	break;
+
+    default :
+        fprintf(stderr, "ippserver: Unsupported value on line %d of \"%s\".\n", f->linenum, f->filename);
+        return (0);
+  }
+
+  return (1);
+}
+
+
+/*
+ * 'print_escaped_string()' - Print an escaped string value.
+ */
+
+static void
+print_escaped_string(
+    cups_file_t *fp,			/* I - File to write to */
+    const char  *s,			/* I - String to print */
+    size_t      len)			/* I - Length of string */
+{
+  cupsFilePutChar(fp, '\"');
+  while (len > 0)
+  {
+    if (*s == '\"')
+      cupsFilePutChar(fp, '\\');
+    cupsFilePutChar(fp, *s);
+
+    s ++;
+    len --;
+  }
+  cupsFilePutChar(fp, '\"');
+}
+
+
+/*
+ * 'print_ipp_attr()' - Print an IPP attribute definition.
+ */
+
+static void
+print_ipp_attr(
+    cups_file_t     *fp,		/* I - File to write to */
+    ipp_attribute_t *attr,		/* I - Attribute to print */
+    int             indent)		/* I - Indentation level */
+{
+  int			i,		/* Looping var */
+			count = ippGetCount(attr);
+					/* Number of values */
+  ipp_attribute_t	*colattr;	/* Collection attribute */
+
+
+  if (indent == 0)
+    cupsFilePrintf(fp, "ATTR %s %s", ippTagString(ippGetValueTag(attr)), ippGetName(attr));
+  else
+    cupsFilePrintf(fp, "%*sMEMBER %s %s", indent, "", ippTagString(ippGetValueTag(attr)), ippGetName(attr));
+
+  switch (ippGetValueTag(attr))
+  {
+    case IPP_TAG_INTEGER :
+    case IPP_TAG_ENUM :
+	for (i = 0; i < count; i ++)
+	  cupsFilePrintf(fp, "%s%d", i ? "," : " ", ippGetInteger(attr, i));
+	break;
+
+    case IPP_TAG_BOOLEAN :
+	cupsFilePuts(fp, ippGetBoolean(attr, 0) ? " true" : " false");
+
+	for (i = 1; i < count; i ++)
+	  cupsFilePuts(fp, ippGetBoolean(attr, 1) ? ",true" : ",false");
+	break;
+
+    case IPP_TAG_RANGE :
+	for (i = 0; i < count; i ++)
+	{
+	  int upper, lower = ippGetRange(attr, i, &upper);
+
+	  cupsFilePrintf(fp, "%s%d-%d", i ? "," : " ", lower, upper);
+	}
+	break;
+
+    case IPP_TAG_RESOLUTION :
+	for (i = 0; i < count; i ++)
+	{
+	  ipp_res_t units;
+	  int yres, xres = ippGetResolution(attr, i, &yres, &units);
+
+	  cupsFilePrintf(fp, "%s%dx%d%s", i ? "," : " ", xres, yres, units == IPP_RES_PER_INCH ? "dpi" : "dpcm");
+	}
+	break;
+
+    case IPP_TAG_DATE :
+	for (i = 0; i < count; i ++)
+	  cupsFilePrintf(fp, "%s%s", i ? "," : " ", iso_date(ippGetDate(attr, i)));
+	break;
+
+    case IPP_TAG_STRING :
+	for (i = 0; i < count; i ++)
+	{
+	  int len;
+	  const char *s = (const char *)ippGetOctetString(attr, i, &len);
+
+	  cupsFilePuts(fp, i ? "," : " ");
+	  print_escaped_string(fp, s, (size_t)len);
+	}
+	break;
+
+    case IPP_TAG_TEXT :
+    case IPP_TAG_TEXTLANG :
+    case IPP_TAG_NAME :
+    case IPP_TAG_NAMELANG :
+    case IPP_TAG_KEYWORD :
+    case IPP_TAG_URI :
+    case IPP_TAG_URISCHEME :
+    case IPP_TAG_CHARSET :
+    case IPP_TAG_LANGUAGE :
+    case IPP_TAG_MIMETYPE :
+	for (i = 0; i < count; i ++)
+	{
+	  const char *s = ippGetString(attr, i, NULL);
+
+	  cupsFilePuts(fp, i ? "," : " ");
+	  print_escaped_string(fp, s, strlen(s));
+	}
+	break;
+
+    case IPP_TAG_BEGIN_COLLECTION :
+	for (i = 0; i < count; i ++)
+	{
+	  ipp_t *col = ippGetCollection(attr, i);
+
+	  cupsFilePuts(fp, i ? ",{\n" : " {\n");
+	  for (colattr = ippFirstAttribute(col); colattr; colattr = ippNextAttribute(col))
+	    print_ipp_attr(fp, colattr, indent + 4);
+	  cupsFilePrintf(fp, "%*s}", indent, "");
+	}
+	break;
+
+    default :
+        /* Out-of-band value */
+	break;
+  }
+
+  cupsFilePuts(fp, "\n");
+}
+
+
+/*
+ * 'save_printer()' - Save printer configuration information to disk.
+ */
+
+static void
+save_printer(
+    server_printer_t *printer,		/* I - Printer */
+    const char       *directory)	/* I - Directory for conf files */
+{
+  char		filename[1024];		/* Filename */
+  cups_file_t	*fp;			/* File pointer */
+  ipp_attribute_t *attr;		/* Current attribute */
+  const char	*aname;			/* Attribute name */
+#ifndef _WIN32
+  struct group	*grp;			/* Group information */
+#endif /* !_WIN32 */
+  server_icc_t	*icc;			/* Current ICC profile */
+  server_lang_t	*lang;			/* Current language */
+  server_device_t *device;		/* Current device */
+
+
+  _cupsRWLockRead(&printer->rwlock);
+
+  snprintf(filename, sizeof(filename), "%s/%s.conf", directory, printer->name);
+  if ((fp = cupsFileOpen(filename, "w")) != NULL)
+  {
+    cupsFilePrintf(fp, "# Written by ippserver on %s\n", httpGetDateString(time(NULL)));
+
+#ifndef _WIN32
+    if (printer->pinfo.print_group != SERVER_GROUP_NONE && (grp = getgrgid(printer->pinfo.print_group)) != NULL)
+      cupsFilePutConf(fp, "AuthPrintGroup", grp->gr_name);
+
+    if (printer->pinfo.proxy_group != SERVER_GROUP_NONE && (grp = getgrgid(printer->pinfo.proxy_group)) != NULL)
+      cupsFilePutConf(fp, "AuthProxyGroup", grp->gr_name);
+#endif /* !_WIN32 */
+
+    if (printer->pinfo.command)
+      cupsFilePutConf(fp, "Command", printer->pinfo.command);
+
+    if (printer->pinfo.device_uri)
+      cupsFilePutConf(fp, "DeviceURI", printer->pinfo.device_uri);
+
+    cupsFilePrintf(fp, "InitialState %d %d %u", printer->is_accepting, (int)printer->state, printer->state_reasons);
+
+    if (printer->pinfo.output_format)
+      cupsFilePutConf(fp, "OutputFormat", printer->pinfo.output_format);
+
+    for (icc = (server_icc_t *)cupsArrayFirst(printer->pinfo.profiles); icc; icc = (server_icc_t *)cupsArrayNext(printer->pinfo.profiles))
+    {
+      const char *name = ippGetString(ippFindAttribute(icc->attrs, "profile-name", IPP_TAG_NAME), 0, NULL);
+					/* Name string */
+
+      cupsFilePuts(fp, "Profile ");
+      print_escaped_string(fp, name, strlen(name));
+      cupsFilePuts(fp, " ");
+      print_escaped_string(fp, icc->resource->filename, strlen(icc->resource->filename));
+      cupsFilePuts(fp, " {\n");
+
+      for (attr = ippFirstAttribute(icc->attrs); attr; attr = ippNextAttribute(icc->attrs))
+      {
+        name = ippGetName(attr);
+
+        if (strcmp(name, "profile-name") && strcmp(name, "profile-uri"))
+          print_ipp_attr(fp, attr, 4);
+      }
+      cupsFilePuts(fp, "}\n");
+    }
+
+    for (lang = (server_lang_t *)cupsArrayFirst(printer->pinfo.strings); lang; lang = (server_lang_t *)cupsArrayNext(printer->pinfo.strings))
+      cupsFilePrintf(fp, "Strings %s %s\n", lang->lang, lang->resource->filename);
+
+    if (printer->pinfo.max_devices)
+      cupsFilePrintf(fp, "MaxOutputDevices %d\n", printer->pinfo.max_devices);
+    for (device = (server_device_t *)cupsArrayFirst(printer->pinfo.devices); device; device = (server_device_t *)cupsArrayNext(printer->pinfo.devices))
+      cupsFilePutConf(fp, "OutputDevice", device->uuid);
+
+    cupsFilePutConf(fp, "WebForms", printer->pinfo.web_forms ? "Yes" : "No");
+
+    for (attr = ippFirstAttribute(printer->pinfo.attrs); attr; attr = ippNextAttribute(printer->pinfo.attrs))
+    {
+      if (ippGetGroupTag(attr) != IPP_TAG_PRINTER || (aname = ippGetName(attr)) == NULL || !attr_cb(NULL, NULL, aname))
+        continue;
+
+      print_ipp_attr(fp, attr, 0);
+    }
+
+    cupsFileClose(fp);
+  }
+
+  _cupsRWUnlock(&printer->rwlock);
 }
 
 
@@ -2312,17 +3478,31 @@ token_cb(_ipp_file_t    *f,		/* I - IPP file data */
 
     pinfo->device_uri = strdup(value);
   }
-  else if (!_cups_strcasecmp(token, "OutputFormat"))
+  else if (!_cups_strcasecmp(token, "InitialState"))
   {
     if (!_ippFileReadToken(f, temp, sizeof(temp)))
     {
-      serverLog(SERVER_LOGLEVEL_ERROR, "Missing OutputFormat value on line %d of \"%s\".", f->linenum, f->filename);
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing InitialState value on line %d of \"%s\".", f->linenum, f->filename);
       return (0);
     }
 
-    _ippVarsExpand(vars, value, temp, sizeof(value));
+    pinfo->initial_accepting = (char)atoi(temp);
 
-    pinfo->output_format = strdup(value);
+    if (!_ippFileReadToken(f, temp, sizeof(temp)))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing InitialState value on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    pinfo->initial_state = (ipp_pstate_t)atoi(temp);
+
+    if (!_ippFileReadToken(f, temp, sizeof(temp)))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing InitialState value on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    pinfo->initial_reasons = (server_preason_t)strtol(temp, NULL, 10);
   }
   else if (!_cups_strcasecmp(token, "Make"))
   {
@@ -2336,6 +3516,16 @@ token_cb(_ipp_file_t    *f,		/* I - IPP file data */
 
     pinfo->make = strdup(value);
   }
+  else if (!_cups_strcasecmp(token, "MaxOutputDevices"))
+  {
+    if (!_ippFileReadToken(f, temp, sizeof(temp)))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing MaxOutputDevices value on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    pinfo->max_devices = atoi(temp);
+  }
   else if (!_cups_strcasecmp(token, "Model"))
   {
     if (!_ippFileReadToken(f, temp, sizeof(temp)))
@@ -2348,14 +3538,36 @@ token_cb(_ipp_file_t    *f,		/* I - IPP file data */
 
     pinfo->model = strdup(value);
   }
-  else if (!_cups_strcasecmp(token, "Strings"))
+  else if (!_cups_strcasecmp(token, "OutputDevice"))
   {
-    server_lang_t	lang;			/* New localization */
-    char		stringsfile[1024];	/* Strings filename */
+    if (!_ippFileReadToken(f, temp, sizeof(temp)))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing OutputDevice UUID value on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    serverCreateDevicePinfo(pinfo, temp);
+  }
+  else if (!_cups_strcasecmp(token, "OutputFormat"))
+  {
+    if (!_ippFileReadToken(f, temp, sizeof(temp)))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing OutputFormat value on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    _ippVarsExpand(vars, value, temp, sizeof(value));
+
+    pinfo->output_format = strdup(value);
+  }
+  else if (!_cups_strcasecmp(token, "Profile"))
+  {
+    server_icc_t	icc;		/* ICC profile data */
+    char		filename[1024];	/* ICC file */
 
     if (!_ippFileReadToken(f, temp, sizeof(temp)))
     {
-      serverLog(SERVER_LOGLEVEL_ERROR, "Missing STRINGS language on line %d of \"%s\".", f->linenum, f->filename);
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing Profile name on line %d of \"%s\".", f->linenum, f->filename);
       return (0);
     }
 
@@ -2363,14 +3575,65 @@ token_cb(_ipp_file_t    *f,		/* I - IPP file data */
 
     if (!_ippFileReadToken(f, temp, sizeof(temp)))
     {
-      serverLog(SERVER_LOGLEVEL_ERROR, "Missing STRINGS filename on line %d of \"%s\".", f->linenum, f->filename);
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing Profile filename on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    _ippVarsExpand(vars, filename, temp, sizeof(filename));
+
+    if (!_ippFileReadToken(f, temp, sizeof(temp)) || strcmp(temp, "{"))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing Profile collection on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    if ((icc.attrs = parse_collection(f, vars, pinfo)) == NULL)
+      return (0);
+
+    if ((icc.resource = serverFindResourceByFilename(filename)) == NULL)
+      icc.resource = serverCreateResource(NULL, filename, "application/icc", value, value, "static-icc-profile", NULL);
+
+    ippAddString(icc.attrs, IPP_TAG_PRINTER, IPP_TAG_NAME, "profile-name", NULL, value);
+    httpAssembleURI(HTTP_URI_CODING_ALL, temp, sizeof(temp),
+#ifdef HAVE_SSL
+                    Encryption != HTTP_ENCRYPTION_NEVER ? SERVER_HTTPS_SCHEME : SERVER_HTTP_SCHEME,
+#else
+                    SERVER_HTTP_SCHEME,
+#endif /* HAVE_SSL */
+                    NULL, ServerName, DefaultPort, icc.resource->resource);
+    ippAddString(icc.attrs, IPP_TAG_PRINTER, IPP_TAG_URI, "profile-uri", NULL, temp);
+
+    if (!pinfo->profiles)
+      pinfo->profiles = cupsArrayNew3(NULL, NULL, NULL, 0, (cups_acopy_func_t)copy_icc, (cups_afree_func_t)free_icc);
+
+    cupsArrayAdd(pinfo->profiles, &icc);
+
+    serverLog(SERVER_LOGLEVEL_DEBUG, "Added ICC profile \"%s\".", filename);
+  }
+  else if (!_cups_strcasecmp(token, "Strings"))
+  {
+    server_lang_t lang;			/* New localization */
+    char	stringsfile[1024];	/* Strings filename */
+
+    if (!_ippFileReadToken(f, temp, sizeof(temp)))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing Strings language on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    _ippVarsExpand(vars, value, temp, sizeof(value));
+
+    if (!_ippFileReadToken(f, temp, sizeof(temp)))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing Strings filename on line %d of \"%s\".", f->linenum, f->filename);
       return (0);
     }
 
     _ippVarsExpand(vars, stringsfile, temp, sizeof(stringsfile));
 
-    lang.lang     = value;
-    lang.filename = stringsfile;
+    lang.lang = value;
+    if ((lang.resource = serverFindResourceByFilename(stringsfile)) == NULL)
+      lang.resource = serverCreateResource(NULL, stringsfile, "text/strings", value, value, "static-strings", value);
 
     if (!pinfo->strings)
       pinfo->strings = cupsArrayNew3((cups_array_func_t)compare_lang, NULL, NULL, 0, (cups_acopy_func_t)copy_lang, (cups_afree_func_t)free_lang);
@@ -2378,6 +3641,16 @@ token_cb(_ipp_file_t    *f,		/* I - IPP file data */
     cupsArrayAdd(pinfo->strings, &lang);
 
     serverLog(SERVER_LOGLEVEL_DEBUG, "Added strings file \"%s\" for language \"%s\".", stringsfile, value);
+  }
+  else if (!_cups_strcasecmp(token, "WebForms"))
+  {
+    if (!_ippFileReadToken(f, temp, sizeof(temp)))
+    {
+      serverLog(SERVER_LOGLEVEL_ERROR, "Missing WebForms value on line %d of \"%s\".", f->linenum, f->filename);
+      return (0);
+    }
+
+    pinfo->web_forms = !_cups_strcasecmp(temp, "yes") || !_cups_strcasecmp(temp, "on") || !_cups_strcasecmp(temp, "true");
   }
   else
   {

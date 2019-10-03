@@ -1,8 +1,8 @@
 #
 # IPP documentation makefile.
 #
-# Copyright 2014-2017 by the IEEE-ISTO Printer Working Group.
-# Copyright 2015-2017 by Apple Inc.
+# Copyright © 2014-2019 by the IEEE-ISTO Printer Working Group.
+# Copyright © 2015-2019 by Apple Inc.
 #
 # Licensed under Apache License v2.0.  See the file "LICENSE" for more
 # information.
@@ -16,19 +16,24 @@ OBJS		=	\
 TARGETS		=	\
 			mantohtml
 MAN1		=	\
-			ippdoclint.1 \
+			ipp3dprinter.1 \
+			ippeveprinter.1 \
 			$(IPPFIND_MAN) \
-			ipptool.1 \
-			$(IPPTRANSFORM_MAN) \
-			$(IPPTRANSFORM3D_MAN)
+			ipptool.1
 MAN5		=	\
 			ipptoolfile.5
 
+MAN7		=	\
+			ippdoclint.7 \
+			$(IPPTRANSFORM_MAN) \
+			$(IPPTRANSFORM3D_MAN)
 MAN8		=	\
 			ippproxy.8 \
 			ippserver.8
 HTML		=	\
+			ipp3dprinter.html \
 			ippdoclint.html \
+			ippeveprinter.html \
 			$(IPPFIND_HTML) \
 			ippproxy.html \
 			ippserver.html \
@@ -42,8 +47,8 @@ HTML		=	\
 # Rules for converting man pages to HTML...
 #
 
-.SUFFIXES:	.1 .5 .8 .html
-.1.html .5.html .8.html:	mantohtml
+.SUFFIXES:	.1 .5 .7 .8 .html
+.1.html .5.html .7.html .8.html:	mantohtml
 	echo Generating $@...
 	./mantohtml $< >$@
 
@@ -85,6 +90,11 @@ install:
 	for file in $(MAN5); do \
 		man="`echo $$file | sed -e '1,$$s/^ipp/$(IPP)/'`"; \
 		$(INSTALL_MAN) $$file $(BUILDROOT)$(mandir)/man5/$$man; \
+	done
+	$(INSTALL_DIR) -m 755 $(BUILDROOT)$(mandir)/man7
+	for file in $(MAN7); do \
+		man="`echo $$file .| sed -e '1,$$s/^ipp/$(IPP)/'`"; \
+		$(INSTALL_MAN) $$file $(BUILDROOT)$(mandir)/man7/$$man; \
 	done
 	$(INSTALL_DIR) -m 755 $(BUILDROOT)$(mandir)/man8
 	for file in $(MAN8); do \

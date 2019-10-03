@@ -73,7 +73,7 @@ serverTransformJob(
   double	start,			/* Start time */
                 end;			/* End time */
   char		*myargv[3],		/* Command-line arguments */
-		*myenvp[200];		/* Environment variables */
+		*myenvp[400];		/* Environment variables */
   int		myenvc;			/* Number of environment variables */
   ipp_attribute_t *attr;		/* Job attribute */
   char		val[1280],		/* IPP_NAME=value */
@@ -132,123 +132,81 @@ serverTransformJob(
   if (job->printer->pinfo.device_uri && asprintf(myenvp + myenvc, "DEVICE_URI=%s", job->printer->pinfo.device_uri) > 0)
     myenvc ++;
 
-  if ((attr = ippFindAttribute(job->attrs, "document-name", IPP_TAG_NAME)) != NULL && asprintf(myenvp + myenvc, "DOCUMENT_NAME=%s", ippGetString(attr, 0, NULL)) > 0)
-    myenvc ++;
-
-  /* TODO: OUTPUT_ORDER, defaults (Issue #94) */
-
   if (format && asprintf(myenvp + myenvc, "OUTPUT_TYPE=%s", format) > 0)
     myenvc ++;
 
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "copies-default", IPP_TAG_INTEGER)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "copies-default", IPP_TAG_INTEGER);
-  if (attr)
+  for (attr = ippFirstAttribute(job->printer->dev_attrs); attr && myenvc < (int)(sizeof(myenvp) / sizeof(myenvp[0]) - 1); attr = ippNextAttribute(job->printer->dev_attrs))
   {
-    ippAttributeString(attr, val, sizeof(val));
+   /*
+    * Convert "attribute-name-default" to "IPP_ATTRIBUTE_NAME_DEFAULT=" and
+    * "pwg-xxx" to "IPP_PWG_XXX=", then add the value(s) from the attribute.
+    */
 
-    if (asprintf(myenvp + myenvc, "PRINTER_COPIES_DEFAULT=%s", val))
-      myenvc ++;
+    const char	*name = ippGetName(attr),
+					/* Attribute name */
+		*suffix = strstr(name, "-default");
+					/* Suffix on attribute name */
+
+    if (strncmp(name, "pwg-", 4) && (!suffix || suffix[8]))
+      continue;
+
+    valptr = val;
+    *valptr++ = 'I';
+    *valptr++ = 'P';
+    *valptr++ = 'P';
+    *valptr++ = '_';
+    while (*name && valptr < (val + sizeof(val) - 2))
+    {
+      if (*name == '-')
+	*valptr++ = '_';
+      else
+	*valptr++ = (char)toupper(*name & 255);
+
+      name ++;
+    }
+    *valptr++ = '=';
+    ippAttributeString(attr, valptr, sizeof(val) - (size_t)(valptr - val));
+
+    myenvp[myenvc++] = strdup(val);
   }
 
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "finishings-default", IPP_TAG_ENUM)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "finishings-default", IPP_TAG_ENUM);
-  if (attr)
+  for (attr = ippFirstAttribute(job->printer->pinfo.attrs); attr && myenvc < (int)(sizeof(myenvp) / sizeof(myenvp[0]) - 1); attr = ippNextAttribute(job->printer->pinfo.attrs))
   {
-    ippAttributeString(attr, val, sizeof(val));
+   /*
+    * Convert "attribute-name-default" to "IPP_ATTRIBUTE_NAME_DEFAULT=" and
+    * "pwg-xxx" to "IPP_PWG_XXX=", then add the value(s) from the attribute.
+    */
 
-    if (asprintf(myenvp + myenvc, "PRINTER_FINISHINGS_DEFAULT=%s", val))
-      myenvc ++;
+    const char	*name = ippGetName(attr),
+					/* Attribute name */
+		*suffix = strstr(name, "-default");
+					/* Suffix on attribute name */
+
+    if (strncmp(name, "pwg-", 4) && (!suffix || suffix[8]))
+      continue;
+
+    if (ippFindAttribute(job->printer->dev_attrs, name, IPP_TAG_ZERO))
+      continue;				/* Skip attributes we already have */
+
+    valptr = val;
+    *valptr++ = 'I';
+    *valptr++ = 'P';
+    *valptr++ = 'P';
+    *valptr++ = '_';
+    while (*name && valptr < (val + sizeof(val) - 2))
+    {
+      if (*name == '-')
+	*valptr++ = '_';
+      else
+	*valptr++ = (char)toupper(*name & 255);
+
+      name ++;
+    }
+    *valptr++ = '=';
+    ippAttributeString(attr, valptr, sizeof(val) - (size_t)(valptr - val));
+
+    myenvp[myenvc++] = strdup(val);
   }
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "finishings-col-default", IPP_TAG_BEGIN_COLLECTION)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "finishings-col-default", IPP_TAG_BEGIN_COLLECTION);
-  if (attr)
-  {
-    ippAttributeString(attr, val, sizeof(val));
-
-    if (asprintf(myenvp + myenvc, "PRINTER_FINISHINGS_COL_DEFAULT=%s", val))
-      myenvc ++;
-  }
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "materials-col-default", IPP_TAG_BEGIN_COLLECTION)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "materials-col-default", IPP_TAG_BEGIN_COLLECTION);
-  if (attr)
-  {
-    ippAttributeString(attr, val, sizeof(val));
-
-    if (asprintf(myenvp + myenvc, "PRINTER_MATERIALS_COL_DEFAULT=%s", val))
-      myenvc ++;
-  }
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "media-default", IPP_TAG_KEYWORD)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "media-default", IPP_TAG_KEYWORD);
-  if (attr && asprintf(myenvp + myenvc, "PRINTER_MEDIA_DEFAULT=%s", ippGetString(attr, 0, NULL)))
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "media-col-default", IPP_TAG_BEGIN_COLLECTION)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "media-col-default", IPP_TAG_BEGIN_COLLECTION);
-  if (attr)
-  {
-    ippAttributeString(attr, val, sizeof(val));
-
-    if (asprintf(myenvp + myenvc, "PRINTER_MEDIA_COL_DEFAULT=%s", val))
-      myenvc ++;
-  }
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "number-up-default", IPP_TAG_INTEGER)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "number-up-default", IPP_TAG_INTEGER);
-  if (attr)
-  {
-    ippAttributeString(attr, val, sizeof(val));
-
-    if (asprintf(myenvp + myenvc, "PRINTER_NUMBER_UP_DEFAULT=%s", val))
-      myenvc ++;
-  }
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "platform-temperature-default", IPP_TAG_INTEGER)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "platform-temperature-default", IPP_TAG_INTEGER);
-  if (attr && asprintf(myenvp + myenvc, "PRINTER_PLATFORM_TEMPERATURE_DEFAULT=%d", ippGetInteger(attr, 0)))
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "print-base-default", IPP_TAG_KEYWORD)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "print-base-default", IPP_TAG_KEYWORD);
-  if (attr && asprintf(myenvp + myenvc, "PRINTER_PRINT_BASE_DEFAULT=%s", ippGetString(attr, 0, NULL)))
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "print-quality-default", IPP_TAG_ENUM)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "print-quality-default", IPP_TAG_ENUM);
-  if (attr && asprintf(myenvp + myenvc, "PRINTER_PRINT_QUALITY_DEFAULT=%d", ippGetInteger(attr, 0)))
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "print-color-mode-default", IPP_TAG_KEYWORD)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "print-color-mode-default", IPP_TAG_KEYWORD);
-  if (attr && asprintf(myenvp + myenvc, "PRINTER_PRINT_COLOR_MODE_DEFAULT=%s", ippGetString(attr, 0, NULL)))
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "print-supports-default", IPP_TAG_INTEGER)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "print-supports-default", IPP_TAG_INTEGER);
-  if (attr && asprintf(myenvp + myenvc, "PRINTER_PRINT_SUPPORTS_DEFAULT=%s", ippGetString(attr, 0, NULL)))
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "sides-default", IPP_TAG_KEYWORD)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "sides-default", IPP_TAG_KEYWORD);
-  if (attr && asprintf(myenvp + myenvc, "PRINTER_SIDES_DEFAULT=%s", ippGetString(attr, 0, NULL)))
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "pwg-raster-document-resolution-supported", IPP_TAG_RESOLUTION)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "pwg-raster-document-resolution-supported", IPP_TAG_RESOLUTION);
-  if (attr && ippAttributeString(attr, val, sizeof(val)) > 0 && asprintf(myenvp + myenvc, "PWG_RASTER_DOCUMENT_RESOLUTION_SUPPORTED=%s", val) > 0)
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "pwg-raster-document-sheet-back", IPP_TAG_KEYWORD)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "pwg-raster-document-sheet-back", IPP_TAG_KEYWORD);
-  if (attr && asprintf(myenvp + myenvc, "PWG_RASTER_DOCUMENT_SHEET_BACK=%s", ippGetString(attr, 0, NULL)) > 0)
-    myenvc ++;
-
-  if ((attr = ippFindAttribute(job->printer->dev_attrs, "pwg-raster-document-type-supported", IPP_TAG_KEYWORD)) == NULL)
-    attr = ippFindAttribute(job->printer->pinfo.attrs, "pwg-raster-document-type-supported", IPP_TAG_KEYWORD);
-  if (attr && ippAttributeString(attr, val, sizeof(val)) > 0 && asprintf(myenvp + myenvc, "PWG_RASTER_DOCUMENT_TYPE_SUPPORTED=%s", val) > 0)
-    myenvc ++;
 
   if (LogLevel == SERVER_LOGLEVEL_INFO)
     myenvp[myenvc ++] = strdup("SERVER_LOGLEVEL=info");
@@ -256,6 +214,37 @@ serverTransformJob(
     myenvp[myenvc ++] = strdup("SERVER_LOGLEVEL=debug");
   else
     myenvp[myenvc ++] = strdup("SERVER_LOGLEVEL=error");
+
+  for (attr = ippFirstAttribute(job->doc_attrs); attr && myenvc < (int)(sizeof(myenvp) / sizeof(myenvp[0]) - 1); attr = ippNextAttribute(job->doc_attrs))
+  {
+   /*
+    * Convert "attribute-name" to "IPP_ATTRIBUTE_NAME=" and then add the
+    * value(s) from the attribute.
+    */
+
+    const char *name = ippGetName(attr);
+    if (!name)
+      continue;
+
+    valptr = val;
+    *valptr++ = 'I';
+    *valptr++ = 'P';
+    *valptr++ = 'P';
+    *valptr++ = '_';
+    while (*name && valptr < (val + sizeof(val) - 2))
+    {
+      if (*name == '-')
+        *valptr++ = '_';
+      else
+        *valptr++ = (char)toupper(*name & 255);
+
+      name ++;
+    }
+    *valptr++ = '=';
+    ippAttributeString(attr, valptr, sizeof(val) - (size_t)(valptr - val));
+
+    myenvp[myenvc++] = strdup(val);
+  }
 
   for (attr = ippFirstAttribute(job->attrs); attr && myenvc < (int)(sizeof(myenvp) / sizeof(myenvp[0]) - 1); attr = ippNextAttribute(job->attrs))
   {
@@ -266,6 +255,9 @@ serverTransformJob(
 
     const char *name = ippGetName(attr);
     if (!name)
+      continue;
+
+    if (ippFindAttribute(job->doc_attrs, name, IPP_TAG_ZERO))
       continue;
 
     valptr = val;
@@ -316,10 +308,10 @@ serverTransformJob(
     if (mode == SERVER_TRANSFORM_TO_FILE)
     {
       serverCreateJobFilename(job, format, line, sizeof(line));
-      mystdout[1] = open(line, O_WRONLY | O_CREAT | O_TRUNC | O_EXCL, 0666);
+      mystdout[1] = open(line, O_WRONLY | O_CREAT | O_TRUNC | O_EXCL | O_BINARY, 0666);
     }
     else
-      mystdout[1] = open("/dev/null", O_WRONLY);
+      mystdout[1] = open("/dev/null", O_WRONLY | O_BINARY);
 
     if (mystdout[1] < 0)
     {
@@ -335,14 +327,14 @@ serverTransformJob(
   }
 
   posix_spawn_file_actions_init(&actions);
-  posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0);
+  posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY | O_BINARY, 0);
   if (mystdout[1] < 0)
-    posix_spawn_file_actions_addopen(&actions, 1, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, 1, "/dev/null", O_WRONLY | O_BINARY, 0);
   else
     posix_spawn_file_actions_adddup2(&actions, mystdout[1], 1);
 
   if (mystderr[1] < 0)
-    posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, 2, "/dev/null", O_WRONLY | O_BINARY, 0);
   else
     posix_spawn_file_actions_adddup2(&actions, mystderr[1], 2);
 
@@ -668,8 +660,10 @@ process_state_message(
     char         *message)		/* I - Message */
 {
   int		i;			/* Looping var */
-  server_preason_t state_reasons,	/* printer-state-reasons values */
-		bit;			/* Current reason bit */
+  server_preason_t preasons,		/* printer-state-reasons values */
+		pbit;			/* Current printer reason bit */
+  server_jreason_t jreasons,		/* job-state-reasons values */
+		jbit;			/* Current job reason bit */
   char		*ptr,			/* Pointer into message */
 		*next;			/* Next keyword in message */
   int		remove;			/* Non-zero if we are removing keywords */
@@ -686,7 +680,7 @@ process_state_message(
  /*
   * Support the following forms of message:
   *
-  * "keyword[,keyword,...]" to set the printer-state-reasons value(s).
+  * "keyword[,keyword,...]" to set the job/printer-state-reasons value(s).
   *
   * "-keyword[,keyword,...]" to remove keywords.
   *
@@ -698,26 +692,40 @@ process_state_message(
 
   if (*message == '-')
   {
-    remove        = 1;
-    state_reasons = job->printer->state_reasons;
+    remove   = 1;
+    jreasons = job->state_reasons;
+    preasons = job->printer->state_reasons;
     message ++;
   }
   else if (*message == '+')
   {
-    remove        = 0;
-    state_reasons = job->printer->state_reasons;
+    remove   = 0;
+    jreasons = job->state_reasons;
+    preasons = job->printer->state_reasons;
     message ++;
   }
   else
   {
-    remove        = 0;
-    state_reasons = SERVER_PREASON_NONE;
+    remove   = 0;
+    jreasons = job->state_reasons;
+    preasons = SERVER_PREASON_NONE;
   }
 
   while (*message)
   {
     if ((next = strchr(message, ',')) != NULL)
       *next++ = '\0';
+
+    for (i = 0, jbit = 1; i < (int)(sizeof(server_jreasons) / sizeof(server_jreasons[0])); i ++, jbit *= 2)
+    {
+      if (!strcmp(message, server_jreasons[i]))
+      {
+        if (remove)
+	  jreasons &= ~jbit;
+	else
+	  jreasons |= jbit;
+      }
+    }
 
     if ((ptr = strstr(message, "-error")) != NULL)
       *ptr = '\0';
@@ -726,14 +734,14 @@ process_state_message(
     else if ((ptr = strstr(message, "-warning")) != NULL)
       *ptr = '\0';
 
-    for (i = 0, bit = 1; i < (int)(sizeof(server_preasons) / sizeof(server_preasons[0])); i ++, bit *= 2)
+    for (i = 0, pbit = 1; i < (int)(sizeof(server_preasons) / sizeof(server_preasons[0])); i ++, pbit *= 2)
     {
       if (!strcmp(message, server_preasons[i]))
       {
         if (remove)
-	  state_reasons &= ~bit;
+	  preasons &= ~pbit;
 	else
-	  state_reasons |= bit;
+	  preasons |= pbit;
       }
     }
 
@@ -743,7 +751,8 @@ process_state_message(
       break;
   }
 
-  job->printer->state_reasons = state_reasons;
+  job->state_reasons          = jreasons;
+  job->printer->state_reasons = preasons;
 }
 
 

@@ -1,8 +1,8 @@
 /*
  * Job object code for sample IPP server implementation.
  *
- * Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group
- * Copyright © 2010-2018 by Apple Inc.
+ * Copyright © 2014-2019 by the IEEE-ISTO Printer Working Group
+ * Copyright © 2010-2019 by Apple Inc.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
  * information.
@@ -196,8 +196,9 @@ serverCopyJobStateReasons(
  *                  request.
  */
 
-server_job_t *			/* O - Job */
-serverCreateJob(server_client_t *client)	/* I - Client */
+server_job_t *				/* O - Job */
+serverCreateJob(
+    server_client_t *client)		/* I - Client */
 {
   server_job_t		*job;		/* Job */
   ipp_attribute_t	*attr;		/* Job attribute */
@@ -393,7 +394,7 @@ serverDeleteJob(server_job_t *job)		/* I - Job */
   _cupsRWLockWrite(&job->rwlock);
 
   ippDelete(job->attrs);
-  job->attrs = NULL;
+  ippDelete(job->doc_attrs);
 
   if (job->filename)
   {
@@ -401,7 +402,6 @@ serverDeleteJob(server_job_t *job)		/* I - Job */
       unlink(job->filename);
 
     free(job->filename);
-    job->filename = NULL;
   }
 
   _cupsRWDeinit(&job->rwlock);

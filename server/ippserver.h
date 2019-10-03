@@ -1,8 +1,8 @@
 /*
  * Header file for sample IPP server implementation.
  *
- * Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group
- * Copyright © 2010-2018 by Apple Inc.
+ * Copyright © 2014-2019 by the IEEE-ISTO Printer Working Group
+ * Copyright © 2010-2019 by Apple Inc.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
  * information.
@@ -80,6 +80,10 @@ extern char **environ;
 #  define _cupsMutexDeinit(m)
 #  define _cupsRWDeinit(rw)
 #endif /* HAVE_PTHREAD_H */
+
+#  ifndef O_BINARY			/* Windows "binary file" nonsense */
+#    define O_BINARY 0
+#  endif /* !O_BINARY */
 
 #ifdef _MAIN_C_
 #  define VAR
@@ -437,11 +441,19 @@ typedef struct server_device_s		/**** Output Device data ****/
   server_preason_t	reasons;	/* printer-state-reasons values */
 } server_device_t;
 
+typedef struct server_resource_s server_resource_t;
+
 typedef struct server_lang_s		/**** Localization data ****/
 {
-  char			*lang,		/* Language code */
-			*filename;	/* Strings file */
+  char			*lang;		/* Language code */
+  server_resource_t	*resource;	/* Strings resource file */
 } server_lang_t;
+
+typedef struct server_icc_s		/**** ICC color profile data ****/
+{
+  server_resource_t	*resource;	/* ICC resource file */
+  ipp_t			*attrs;		/* Selection attributes/values */
+} server_icc_t;
 
 typedef struct server_pinfo_s		/**** Printer information ****/
 {
@@ -455,12 +467,19 @@ typedef struct server_pinfo_s		/**** Printer information ****/
 		*output_format;		/* Output format */
   gid_t		print_group,		/* Print group, if any */
 		proxy_group;		/* Proxy group, if any */
-  int		duplex,			/* Duplex mode */
+  char		duplex,			/* Duplex mode */
 		pin,			/* PIN printing mode? */
-		ppm,			/* Pages per minute for mono */
+		web_forms;		/* Enable web interface forms? */
+  int		ppm,			/* Pages per minute for mono */
 		ppm_color;		/* Pages per minute for color */
   ipp_t		*attrs;			/* Printer attributes */
   cups_array_t	*strings;		/* Strings files */
+  cups_array_t	*profiles;		/* ICC color profiles */
+  int		max_devices;		/* Maximum number of devices */
+  cups_array_t	*devices;		/* Associated devices */
+  char		initial_accepting;	/* Initial printer-is-accepting-jobs */
+  ipp_pstate_t	initial_state;		/* Initial printer-state */
+  server_preason_t initial_reasons;	/* Initial printer-state-reasons */
 } server_pinfo_t;
 
 typedef struct server_printer_s		/**** Printer data ****/
@@ -468,20 +487,24 @@ typedef struct server_printer_s		/**** Printer data ****/
   int			id;		/* Printer ID */
   server_type_t		type;		/* Type of printer/service */
   _cups_rwlock_t	rwlock;		/* Printer lock */
-  server_srv_t		ipp_ref,	/* Bonjour IPP service */
-#ifdef HAVE_SSL
-			ipps_ref,	/* Bonjour IPPS service */
-#endif /* HAVE_SSL */
-			http_ref,	/* Bonjour HTTP(S) service */
-			printer_ref;	/* Bonjour LPD service */
-  server_loc_t		geo_ref;	/* Bonjour geo-location */
+#ifdef HAVE_AVAHI
+  server_srv_t		dnssd_ref;	/* DNS-SD registrations */
+#elif defined(HAVE_DNSSD)
+  server_srv_t		ipp_ref,	/* DNS-SD IPP service */
+#  ifdef HAVE_SSL
+			ipps_ref,	/* DNS-SD IPPS service */
+#  endif /* HAVE_SSL */
+			http_ref,	/* DNS-SD HTTP(S) service */
+			printer_ref;	/* DNS-SD LPD service */
+#endif /* HAVE_AVAHI */
+  server_loc_t		geo_ref;	/* DNS-SD geo-location */
   char			*default_uri,	/* Default/first URI */
-			*dnssd_name,	/* printer-dnssd-name */
+			*dns_sd_name,	/* printer-dns-sd-name */
 			*name,		/* printer-name */
 			*resource;	/* Resource path */
   size_t		resourcelen;	/* Length of resource path */
   server_pinfo_t	pinfo;		/* Printer information */
-  cups_array_t		*devices;	/* Associated devices */
+  server_resource_t	*icon_resource;	/* Printer icon resource */
   ipp_t			*dev_attrs;	/* Current device attributes */
   time_t		start_time;	/* Startup time */
   time_t		config_time;	/* printer-config-change-time */
@@ -529,7 +552,8 @@ struct server_job_s			/**** Job data ****/
 			completed;	/* time-at-completed value */
   int			impressions,	/* job-impressions value */
 			impcompleted;	/* job-impressions-completed value */
-  ipp_t			*attrs;		/* Attributes */
+  ipp_t			*attrs,		/* Job attributes */
+			*doc_attrs;	/* Document attributes */
   int			cancel;		/* Non-zero when job canceled */
   char			*filename;	/* Print file name */
   int			fd;		/* Print file descriptor */
@@ -540,7 +564,7 @@ struct server_job_s			/**** Job data ****/
 					/* Job resource IDs */
 };
 
-typedef struct server_resource_s	/**** Resource data ****/
+struct server_resource_s		/**** Resource data ****/
 {
   int			id;		/* resource-id */
   _cups_rwlock_t	rwlock;		/* Resource lock */
@@ -548,9 +572,12 @@ typedef struct server_resource_s	/**** Resource data ****/
   ipp_rstate_t		state;		/* Resource state */
   char			*resource,	/* External resource path */
 			*filename,	/* Local filename */
-			*format;	/* MIME media type */
-  int			use;		/* Use count */
-} server_resource_t;
+			*format,	/* MIME media type */
+			*type;		/* Resource type */
+  int			use,		/* Use count */
+			fd,		/* Resource file descriptor */
+			cancel;		/* Cancel pending */
+};
 
 typedef struct server_subscription_s	/**** Subscription data ****/
 {
@@ -591,6 +618,7 @@ typedef struct server_client_s		/**** Client data ****/
 			username[32];	/* Client authenticated username */
   server_printer_t	*printer;	/* Printer */
   server_job_t		*job;		/* Current job, if any */
+  server_resource_t	*resource;	/* Current resource, if any */
   int			fetch_compression,
 					/* Compress file? */
 			fetch_file;	/* File to fetch */
@@ -610,7 +638,8 @@ typedef struct server_listener_s	/**** Listener data ****/
 
 VAR int			Authentication	VALUE(0);
 VAR gid_t		AuthAdminGroup	VALUE((gid_t)-1),
-			AuthOperatorGroup VALUE((gid_t)-1);
+			AuthOperatorGroup VALUE((gid_t)-1),
+			AuthProxyGroup	VALUE((gid_t)-1);
 VAR char		*AuthName	VALUE(NULL),
 			*AuthService	VALUE(NULL),
 			*AuthType	VALUE(NULL),
@@ -661,7 +690,9 @@ VAR _cups_rwlock_t	PrintersRWLock	VALUE(_CUPS_RWLOCK_INITIALIZER);
 VAR int			RelaxedConformance VALUE(0);
 VAR char		*ServerName	VALUE(NULL);
 VAR char		*SpoolDirectory	VALUE(NULL);
+VAR char		*StateDirectory	VALUE(NULL);
 
+VAR int			DNSSDEnabled	VALUE(1);
 #ifdef HAVE_DNSSD
 VAR DNSServiceRef	DNSSDMaster	VALUE(NULL);
 #elif defined(HAVE_AVAHI)
@@ -671,6 +702,7 @@ VAR AvahiClient		*DNSSDClient	VALUE(NULL);
 VAR char		*DNSSDSubType	VALUE(NULL);
 
 VAR _cups_rwlock_t	ResourcesRWLock	VALUE(_CUPS_RWLOCK_INITIALIZER);
+VAR cups_array_t	*ResourcesByFilename VALUE(NULL);
 VAR cups_array_t	*ResourcesById	VALUE(NULL);
 VAR cups_array_t	*ResourcesByPath VALUE(NULL);
 VAR int			NextResourceId 	VALUE(1);
@@ -689,6 +721,8 @@ VAR int			NextSubscriptionId VALUE(1);
 extern void		serverAddEventNoLock(server_printer_t *printer, server_job_t *job, server_resource_t *res, server_event_t event, const char *message, ...) _CUPS_FORMAT(5, 6);
 extern void		serverAddPrinter(server_printer_t *printer);
 extern void		serverAddResourceFile(server_resource_t *res, const char *filename, const char *format);
+extern void		serverAddStringsFile(server_printer_t *printer, const char *language, server_resource_t *resource);
+extern void		serverAllocatePrinterResource(server_printer_t *printer, server_resource_t *resource);
 extern http_status_t	serverAuthenticateClient(server_client_t *client);
 extern int		serverAuthorizeUser(server_client_t *client, const char *owner, gid_t group, const char *scope);
 extern void		serverCheckJobs(server_printer_t *printer);
@@ -699,13 +733,16 @@ extern void		serverCopyJobStateReasons(ipp_t *ipp, ipp_tag_t group_tag, server_j
 extern void		serverCopyPrinterStateReasons(ipp_t *ipp, ipp_tag_t group_tag, server_printer_t *printer);
 extern server_client_t	*serverCreateClient(int sock);
 extern server_device_t	*serverCreateDevice(server_client_t *client);
+extern server_device_t	*serverCreateDevicePinfo(server_pinfo_t *pinfo, const char *uuid);
 extern server_job_t	*serverCreateJob(server_client_t *client);
 extern void		serverCreateJobFilename(server_job_t *job, const char *format, char *fname, size_t fnamesize);
 extern int		serverCreateListeners(const char *host, int port);
-extern server_printer_t	*serverCreatePrinter(const char *resource, const char *name, server_pinfo_t *pinfo, int dupe_pinfo);
-extern server_resource_t *serverCreateResource(const char *resource, const char *filename, const char *format, const char *name, const char *info, const char *type, const char *owner);
+extern server_printer_t	*serverCreatePrinter(const char *resource, const char *name, const char *info, server_pinfo_t *pinfo, int dupe_pinfo);
+extern server_resource_t *serverCreateResource(const char *resource, const char *filename, const char *format, const char *name, const char *info, const char *type, const char *language);
+extern void		serverCreateResourceFilename(server_resource_t *res, const char *format, const char *prefix, char *fname, size_t fnamesize);
 extern server_subscription_t *serverCreateSubscription(server_client_t *client, int interval, int lease, const char *username, ipp_attribute_t *notify_charset, ipp_attribute_t *notify_natural_language, ipp_attribute_t *notify_events, ipp_attribute_t *notify_attributes, ipp_attribute_t *notify_user_data);
 extern int		serverCreateSystem(const char *directory);
+extern void		serverDeallocatePrinterResource(server_printer_t *printer, server_resource_t *resource);
 extern void		serverDeleteClient(server_client_t *client);
 extern void		serverDeleteDevice(server_device_t *device);
 extern void		serverDeleteJob(server_job_t *job);
@@ -719,6 +756,7 @@ extern server_job_t	*serverFindJob(server_client_t *client, int job_id);
 extern server_printer_t	*serverFindPrinter(const char *resource);
 extern server_resource_t *serverFindResourceById(int id);
 extern server_resource_t *serverFindResourceByPath(const char *resource);
+extern server_resource_t *serverFindResourceByFilename(const char *filename);
 extern server_subscription_t *serverFindSubscription(server_client_t *client, int sub_id);
 extern server_jreason_t	serverGetJobStateReasonsBits(ipp_attribute_t *attr);
 extern server_event_t	serverGetNotifyEventsBits(ipp_attribute_t *attr);
@@ -737,6 +775,7 @@ extern void		*serverProcessClient(server_client_t *client);
 extern int		serverProcessHTTP(server_client_t *client);
 extern int		serverProcessIPP(server_client_t *client);
 extern void		*serverProcessJob(server_job_t *job);
+extern int		serverRegisterPrinter(server_printer_t *printer);
 extern int		serverReleaseJob(server_job_t *job);
 extern int		serverRespondHTTP(server_client_t *client, http_status_t code, const char *content_coding, const char *type, size_t length);
 extern void		serverRespondIPP(server_client_t *client, ipp_status_t status, const char *message, ...) _CUPS_FORMAT(3, 4);
@@ -744,8 +783,11 @@ extern void		serverRespondUnsupported(server_client_t *client, ipp_attribute_t *
 extern void		serverRestartPrinter(server_printer_t *printer);
 extern void		serverResumePrinter(server_printer_t *printer);
 extern void		serverRun(void);
+extern void		serverSaveSystem(void);
+extern void		serverSetResourceState(server_resource_t *resource, ipp_rstate_t state, const char *message, ...) _CUPS_FORMAT(3, 4);
 extern void		serverStopJob(server_job_t *job);
 extern char		*serverTimeString(time_t tv, char *buffer, size_t bufsize);
 extern int		serverTransformJob(server_client_t *client, server_job_t *job, const char *command, const char *format, server_transform_t mode);
+extern void		serverUnregisterPrinter(server_printer_t *printer);
 extern void		serverUpdateDeviceAttributesNoLock(server_printer_t *printer);
 extern void		serverUpdateDeviceStateNoLock(server_printer_t *printer);

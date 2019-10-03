@@ -1,8 +1,8 @@
 /*
  * Configuration file for the IPP sample code.
  *
- * Copyright © 2014-2018 by the IEEE-ISTO Printer Working Group.
- * Copyright © 2007-2018 by Apple Inc.
+ * Copyright © 2014-2019 by the IEEE-ISTO Printer Working Group.
+ * Copyright © 2007-2019 by Apple Inc.
  * Copyright © 1997-2007 by Easy Software Products.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
@@ -42,10 +42,10 @@
  */
 
 #define CUPS_DATADIR "/usr/local/share/cups"
-#define CUPS_LOCALEDIR "/usr/local/lib/locale"
+#define CUPS_LOCALEDIR "/usr/local/share/locale"
 #define CUPS_SERVERBIN "/usr/local/bin"
 #define CUPS_SERVERROOT "/usr/local/etc/cups"
-#define CUPS_STATEDIR "/usr/local/var/run/cups"
+#define CUPS_STATEDIR "/usr/local/etc/cups"
 
 
 /*
@@ -70,7 +70,7 @@
 #define HAVE_LIBPAM 1
 #define HAVE_SECURITY_PAM_APPL_H 1
 /* #undef HAVE_PAM_PAM_APPL_H */
-#define DEFAULT_PAM_SERVICE "other"
+#define DEFAULT_PAM_SERVICE "cups"
 
 
 /*
@@ -166,6 +166,13 @@
 
 
 /*
+ * Do we have the gnutls_fips140_set_mode function?
+ */
+
+/* #undef HAVE_GNUTLS_FIPS140_SET_MODE */
+
+
+/*
  * Do we have the gnutls_transport_set_pull_timeout_function function?
  */
 
@@ -183,22 +190,9 @@
  * What Security framework headers do we have?
  */
 
-/* #undef HAVE_AUTHORIZATION_H */
-/* #undef HAVE_SECBASEPRIV_H */
 #define HAVE_SECCERTIFICATE_H 1
-/* #undef HAVE_SECIDENTITYSEARCHPRIV_H */
 #define HAVE_SECITEM_H 1
-/* #undef HAVE_SECITEMPRIV_H */
 #define HAVE_SECPOLICY_H 1
-/* #undef HAVE_SECPOLICYPRIV_H */
-/* #undef HAVE_SECURETRANSPORTPRIV_H */
-
-
-/*
- * Do we have the cssmErrorString function?
- */
-
-#define HAVE_CSSMERRORSTRING 1
 
 
 /*
@@ -206,20 +200,6 @@
  */
 
 /* #undef HAVE_SECGENERATESELFSIGNEDCERTIFICATE */
-
-
-/*
- * Do we have the SecKeychainOpen function?
- */
-
-#define HAVE_SECKEYCHAINOPEN 1
-
-
-/*
- * Do we have (a working) SSLSetEnabledCiphers function?
- */
-
-#define HAVE_SSLSETENABLEDCIPHERS 1
 
 
 /*
@@ -307,12 +287,10 @@
 
 
 /*
- * Do we have CoreFoundation public and private headers?
+ * Do we have CoreFoundation public headers?
  */
 
 #define HAVE_COREFOUNDATION_H 1
-/* #undef HAVE_CFPRIV_H */
-/* #undef HAVE_CFBUNDLEPRIV_H */
 
 
 /*
@@ -433,7 +411,7 @@ static __inline int _cups_abs(int i) { return (i < 0 ? -i : i); }
  * Do we have the Cura software?
  */
 
-#define CURAENGINE "/Applications/Cura/Cura.app/Contents/Resources/CuraEngine"
+#define CURAENGINE "/Applications/Ultimaker Cura.app/Contents/Resources/CuraEngine"
 
 
 #endif /* !_CUPS_CONFIG_H_ */

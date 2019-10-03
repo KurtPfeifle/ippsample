@@ -8,7 +8,7 @@
 <body>
 <h1 class="title">ippserver(8)</h1>
 <h2 class="title"><a name="NAME">Name</a></h2>
-ippserver - a simple ipp server
+ippserver - a sample ipp server implementation
 <h2 class="title"><a name="SYNOPSIS">Synopsis</a></h2>
 <b>ippserver</b>
 [
@@ -16,6 +16,12 @@ ippserver - a simple ipp server
 ] [
 <b>-C</b>
 <i>config-directory</i>
+] [
+<b>-D</b>
+<i>device-uri</i>
+] [
+<b>-F</b>
+<i>output-type/subtype</i>
 ] [
 <b>-K</b>
 <i>keypath</i>
@@ -57,7 +63,7 @@ ippserver - a simple ipp server
 <i>port</i>
 ] [
 <b>-r</b>
-<i>subtype</i>
+<i>subtype[,...,subtype]</i>
 ] [
 <b>-s</b>
 <i>speed[,color-speed]</i>
@@ -66,14 +72,21 @@ ippserver - a simple ipp server
 ] [
 -B --help
 ] [
+<b>--no-dns-sd</b>
+] [
+<b>--no-web-forms</b>
+] [
 -B --relaxed
+] [
+-B --state
+<i>directory</i>
 ] [
 -B --version
 ]
 <i>"service name"</i>
 <h2 class="title"><a name="DESCRIPTION">Description</a></h2>
 <b>ippserver</b>
-is a simple Internet Printing Protocol (IPP) server conforming to the IPP Everywhere and IPP Shared Infrastructure Extensions (INFRA) specifications. It can be used as a standalone print server and/or a very basic infrastructure server between standard IPP clients and IPP proxies conforming to the INFRA specification.
+is a sample Internet Printing Protocol (IPP) server conforming to the IPP Everywhere, IPP Shared Infrastructure Extensions (INFRA), and IPP System Service specifications. It can be used as a standalone print server and/or a very basic infrastructure server between standard IPP clients and IPP proxies conforming to the INFRA specification.
 <h2 class="title"><a name="OPTIONS">Options</a></h2>
 The following options are recognized by
 <b>ippserver:</b>
@@ -83,6 +96,10 @@ The following options are recognized by
 <dt><b>-C </b><i>config-directory</i>
 <dd style="margin-left: 5.0em">Specifies the location of a directory containing files that define the configuration of the server and the service instances that are available.
 See the section titled "CONFIGURATION DIRECTORIES" below.
+<dt><b>-D </b><i>device-uri</i>
+<dd style="margin-left: 5.0em">Set the device URI for print output.
+<dt><b>-F </b><i>output-type/subtype[,...]</i>
+<dd style="margin-left: 5.0em">Specifies the output MIME media type.
 <dt><b>-K </b><i>keypath</i>
 <dd style="margin-left: 5.0em">Specifies the location of TLS certificates and private keys.
 <dt><b>-M </b><i>manufacturer</i>
@@ -114,16 +131,24 @@ The default is a directory under the user's current temporary directory.
 The default is the name returned by the
 <b>hostname</b>(1)
 command.
+<dt>-B --no-dns-sd
+<dd style="margin-left: 5.0em">Disables DNS-SD registrations.
+<dt>-B --no-web-forms
+<dd style="margin-left: 5.0em">Disables the GET-based web forms that allow web requests to change material, media, and supply levels.
 <dt><b>-p </b><i>port</i>
 <dd style="margin-left: 5.0em">Specifies the port number to listen on.
 The default is a user-specific number from 8000 to 8999.
-<dt><b>-r </b><i>subtype</i>
-<dd style="margin-left: 5.0em">Specifies the Bonjour subtype to advertise for the printer.
+<dt><b>-r </b><i>subtype[,...,subtype]</i>
+<dd style="margin-left: 5.0em">Specifies one or more comma-delimited DNS-SD subtypes to advertise for the printer.
 The default subtype is "_print".
 <dt><b>--relaxed</b>
 <dd style="margin-left: 5.0em">Runs the server in relaxed conformance mode, which allows certain harmless IPP conformance issues to be ignored.
 <dt><b>-s </b><i>speed[,color-speed]</i>
 <dd style="margin-left: 5.0em">Specifies the printer speed in pages-per-minute.
+<dt><b>--state </b><i>directory</i>
+<dd style="margin-left: 3.0em">Specifies a persistent state directory to use.
+The directory is created if it does not exist.
+The default is to not save state information between runs.
 <dt><b>-v[vvv]</b>
 <dd style="margin-left: 5.0em">Be (very) verbose when logging activity to the standard output.
 <dt><b>--version</b>
@@ -163,12 +188,19 @@ The default is "No".
 <dt><b>AuthAdminGroup </b><i>group</i>
 <dd style="margin-left: 5.0em">Specifies the group of print administrators.
 The default administrator group is "wheel".
+<dt><b>AuthGroups </b><i>group [... group]</i>
+<dd style="margin-left: 5.0em">Specifies a list of groups that can be configured via IPP.
+If not specified, the default for non-root users is the list of groups the user belongs to.
+Otherwise, the default is the list of valid groups from "adm", "admin", "daemon", "operator", "staff", and/or "wheel".
 <dt><b>AuthName </b><i>realm</i>
 <dd style="margin-left: 5.0em">Specifies the authentication realm name.
 The default realm name is "Printing".
 <dt><b>AuthOperatorGroup </b><i>group</i>
 <dd style="margin-left: 5.0em">Specifies the group of print operators.
 The default operator group is the primary group for the user running the server.
+<dt><b>AuthProxyGroup </b><i>group</i>
+<dd style="margin-left: 5.0em">Specifies the group of print proxies.
+The default proxy group is the primary group for the user running the server.
 <dt><b>AuthService </b><i>name</i>
 <dd style="margin-left: 5.0em">Specifies the PAM service name.
 The default is either "cups" or "other", depending on the platform.
@@ -270,6 +302,10 @@ The value 0 specifies there is no limit.
 <dd style="margin-left: 5.0em">Specifies the telephone number of the owner or administrator of the server.
 <dt><b>SpoolDir </b><i>path</i>
 <dd style="margin-left: 5.0em">Specifies the location of print job spool files.
+The default is a per-process temporary directory.
+<dt><b>StateDir </b><i>path</i>
+<dd style="margin-left: 5.0em">Specifies the location of persistent printer state files.
+The default is the empty string so no state is persisted.
 <dt><b>SubscriptionPrivacyAttributes </b><i>{all|default|none|list of attributes and groups}</i>
 <dd style="margin-left: 5.0em">Specifies which subscription object attribute values are considered private.
 "All" will hide all attributes except "notify-job-id", "notify-printer-uri", "notify-subscription-id", and "notify-subscription-uuid".
@@ -313,6 +349,16 @@ command can be used for many printers.
 <dd style="margin-left: 5.0em">Specifies the manufacturer name for the printer.
 <dt><b>Model </b><i>model</i>
 <dd style="margin-left: 5.0em">Specifies the model for the printer.
+<dt><b>OutputFormat </b><i>type/subtype</i>
+<dd style="margin-left: 5.0em">Specifies the output MIME media type for the printer.
+<dt><b>Profile </b><i>name filename.icc { ... }</i>
+<dd style="margin-left: 5.0em">Specifies a named ICC profile and any member Job Template attributes that select the profile.
+<dt><b>Strings </b><i>language filename.strings</i>
+<dd style="margin-left: 5.0em">Specifies a localization ("strings") file for the specified language.
+<dt><b>WebForms Yes</b>
+<dd style="margin-left: 5.0em"><dt><b>WebForms No</b>
+<dd style="margin-left: 5.0em">Enables or disables GET-based web forms which are used to manipulate the material, media, and supply levels.
+The default is "Yes" to enable GET-based forms.
 </dl>
 <h3><a name="VARIABLES_IN_ATTRIBUTE_VALUES">Variables In Attribute Values</a></h3>
 <b>ippserver</b>
@@ -328,11 +374,14 @@ variables that can be used in attribute values:
 <h3><a name="PRINT_SERVICE_ICON_FILES">Print Service Icon Files</a></h3>
 The icon for each 2D print service is stored in the <i>print/name.png</i>  file. Similarly, the icon for each 3D print service is stored in the <i>print3d/name.png</i> file.
 <h2 class="title"><a name="SEE_ALSO">See Also</a></h2>
+<b>ippdoclint</b>(7),
+<b>ipptransform</b>(7),
+<b>ipptransform3d</b>(7),
 <b>ipptoolfile</b>(5),
 ISTO PWG Internet Printing Protocol Workgroup (<a href="http://www.pwg.org/ipp">http://www.pwg.org/ipp</a>)
 <h2 class="title"><a name="COPYRIGHT">Copyright</a></h2>
-Copyright &copy; 2014-2018 by the IEEE-ISTO Printer Working Group.
-Copyright &copy; 2007-2018 by Apple Inc.
+Copyright &copy; 2014-2019 by the IEEE-ISTO Printer Working Group.
+Copyright &copy; 2007-2019 by Apple Inc.
 
 </body>
 </html>

@@ -1,7 +1,7 @@
 /*
  * Authentication code for sample IPP server implementation.
  *
- * Copyright © 2018 by the IEEE-ISTO Printer Working Group
+ * Copyright © 2018-2019 by the IEEE-ISTO Printer Working Group
  * Copyright © 2018 by Apple Inc.
  *
  * Licensed under Apache License v2.0.  See the file "LICENSE" for more
@@ -72,6 +72,8 @@ serverAuthenticateClient(
 
   authorization = httpGetField(client->http, HTTP_FIELD_AUTHORIZATION);
 
+//  serverLogClient(SERVER_LOGLEVEL_DEBUG, client, "Authorization: %s", authorization);
+
   if (!*authorization)
   {
     status = HTTP_STATUS_UNAUTHORIZED;
@@ -111,6 +113,8 @@ serverAuthenticateClient(
     {
       *password++ = '\0';
       data.password = password;
+
+//      serverLogClient(SERVER_LOGLEVEL_DEBUG, client, "username='%s', password='%s'", data.username, data.password);
 
       if (!data.username[0])
       {
@@ -382,6 +386,9 @@ serverMakeVCARD(const char *user,	/* I - User name or `NULL` for current user */
 		phoneval[256];		/* Phone number value (URI) */
 #ifndef _WIN32
   struct passwd	*pw;			/* User information */
+  char		gecos[2048],		/* Copy of GECOS information */
+		*gecosval,		/* Current GECOS value */
+		*gecosptr;		/* Pointer into GECOS information */
 
 
   if (user)
@@ -396,10 +403,6 @@ serverMakeVCARD(const char *user,	/* I - User name or `NULL` for current user */
     *
     *     NAME,LOCATION,PHONE
     */
-
-    char	gecos[2048],		/* Copy of GECOS information */
-		*gecosval,		/* Current GECOS value */
-		*gecosptr;		/* Pointer into GECOS information */
 
     strlcpy(gecos, pw->pw_gecos, sizeof(gecos));
     gecosptr = gecos;

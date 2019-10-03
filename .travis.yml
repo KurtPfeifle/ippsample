@@ -16,7 +16,11 @@ script:
   - cd man ; make ; cd -       # HTML files are not built+installed by default
   - make BUILDROOT=$(readlink -f appdir) install
   - mkdir -p ./appdir/usr/share/doc/html/ipptool ; cp man/*.html ./appdir/usr/share/doc/html/ipptool/
-  - mkdir -p ./appdir/usr/share/man/man{1,5,7,8} ; cp man/*.1 ./appdir/usr/share/man/man1/ ; cp man/*.5 ./appdir/usr/share/man/man5/ ; cp man/*.7 ./appdir/usr/share/man/man7/ ; cp man/*.8 ./appdir/usr/share/man/man8/ ;
+  - mkdir -p ./appdir/usr/share/man/man{1,5,7,8} ;
+  - cp man/*.1 ./appdir/usr/share/man/man1/ ;
+  - cp man/*.5 ./appdir/usr/share/man/man5/ ;
+  - cp man/*.7 ./appdir/usr/share/man/man7/ ;
+  - cp man/*.8 ./appdir/usr/share/man/man8/ ;
   - find . -type f -name "*.txt" -exec cp {} ./appdir/ \;
   - find . -type f -name "*.md"  -exec cp {} ./appdir/ \;
   - find . -type f -name README  -exec cp {} ./appdir/ \;
